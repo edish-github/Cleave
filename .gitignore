@@ -1,0 +1,54 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+.next/
+dist/
+build/
+*.tsbuildinfo
+next-env.d.ts
+
+# Environments & secrets
+.env*.local
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+/lib/
+/lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Cleave run outputs & logs
+.cleave/runs/
+*.log
+
+# Personal research, notes & kill-test prototypes
+research/
