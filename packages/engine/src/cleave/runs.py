@@ -14,6 +14,7 @@ Bob down while that file exists.
 
 from __future__ import annotations
 
+import os
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -24,6 +25,9 @@ ACTIVE_FILE = CLEAVE_DIR / "active"
 
 
 def new_run_id(now: datetime | None = None) -> str:
+    env_id = os.environ.get("CLEAVE_RUN_ID")
+    if env_id:
+        return env_id
     now = now or datetime.now(timezone.utc)
     return f"{now:%Y%m%d-%H%M%S}-{secrets.token_hex(3)}"
 

@@ -460,6 +460,7 @@ def create_server(repo: Path) -> FastMCP:
     return server
 
 
-def main() -> None:
-    """Entry point for ``cleave mcp``: serve ``create_server(Path.cwd())`` over stdio."""
-    create_server(Path.cwd()).run()
+def main(repo_path: Path | None = None) -> None:
+    """Entry point for ``cleave mcp``: serve ``create_server(...)`` over stdio."""
+    target = repo_path.resolve() if repo_path else Path.cwd()
+    create_server(target).run()
