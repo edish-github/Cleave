@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CodeBlock } from "@/components/docs/CodeBlock";
 import { SiteShell } from "@/components/landing/SiteShell";
 import { Badge } from "@/components/ui/Badge";
+import { summarizeEval } from "@/lib/eval";
 import { coinsOrDash, formatNumber } from "@/lib/format";
 import { routes } from "@/lib/site";
 import { getEvalResults, type EvalRow } from "@/services";
@@ -29,25 +30,9 @@ const pushCommand = `# From the constructed diff's checkout, after the run finis
 cleave push --eval-group constructed --dataset <name> \\
   --ground-truth ground_truth.json --kind cleave        # or --kind baseline_b1`;
 
-function summarize(rows: EvalRow[]) {
-  const paired = rows.filter((r) => r.cleave && r.baseline);
-  const count = (pick: (r: EvalRow) => Metrics | null, test: (m: Metrics) => boolean) =>
-    paired.filter((r) => {
-      const m = pick(r);
-      return m ? test(m) : false;
-    }).length;
-  return {
-    paired: paired.length,
-    cleaveValid: count((r) => r.cleave, (m) => m.valid),
-    baselineValid: count((r) => r.baseline, (m) => m.valid),
-    cleaveClean: count((r) => r.cleave, (m) => m.foreignLines === 0),
-    baselineClean: count((r) => r.baseline, (m) => m.foreignLines === 0),
-  };
-}
-
 export default async function ResultsPage() {
   const rows = await getEvalResults();
-  const summary = summarize(rows);
+  const summary = summarizeEval(rows);
 
   return (
     <SiteShell>

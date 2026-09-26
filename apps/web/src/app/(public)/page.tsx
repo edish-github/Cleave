@@ -3,16 +3,17 @@ import { FinalCta } from "@/components/landing/FinalCta";
 import { Hero } from "@/components/landing/Hero";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { ProductShowcase } from "@/components/landing/ProductShowcase";
+import { ProofStrip } from "@/components/landing/ProofStrip";
 import { SiteShell } from "@/components/landing/SiteShell";
-
+import { summarizeEval } from "@/lib/eval";
 import { routes } from "@/lib/site";
-import { getFeaturedProof } from "@/services";
+import { getEvalResults, getFeaturedProof } from "@/services";
 
 /** Re-render every minute so the featured proof follows the newest public stack. */
 export const revalidate = 60;
 
 export default async function LandingPage() {
-  const featured = await getFeaturedProof();
+  const [featured, evalRows] = await Promise.all([getFeaturedProof(), getEvalResults()]);
   const proof = featured
     ? {
         href: routes.proof(featured.id),
@@ -24,6 +25,7 @@ export default async function LandingPage() {
     <SiteShell>
       <main id="main">
         <Hero proof={proof} />
+        {featured ? <ProofStrip proof={featured} evaluation={evalRows.length ? summarizeEval(evalRows) : null} /> : null}
         <ProductShowcase />
         <HowItWorks />
         <BobSection />

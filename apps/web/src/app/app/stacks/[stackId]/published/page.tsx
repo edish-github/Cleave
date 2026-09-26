@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageContainer } from "@/components/layout/PageHeader";
+import { AutoRefresh } from "@/components/live/AutoRefresh";
 import { BackLink } from "@/components/stack/StackHeader";
 import { BackendRequiredButton } from "@/components/ui/BackendRequired";
 import { ButtonLink } from "@/components/ui/Button";
@@ -25,6 +26,8 @@ export default async function PublishedPage({ params }: { params: Promise<{ stac
 
   return (
     <PageContainer width="narrow">
+      {/* CI keeps running after publish: refresh while any check is still pending. */}
+      <AutoRefresh active={!sample && Object.values(ci).includes("pending")} />
       <BackLink href={routes.stack(stack.id)}>{stack.title}</BackLink>
 
       <div className="mt-8 text-center">
