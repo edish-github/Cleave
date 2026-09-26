@@ -4,6 +4,10 @@ The guard reads Bob's PreToolUse payload on stdin. While .cleave/active exists i
 through read tools, todo updates and calls to the cleave MCP server, and exits 2 on
 anything else. Bob's docs and its 2.0.2 runtime disagree on field names, so both shapes
 are accepted. Real captured payloads go in tests/payloads/ (open check C1).
+
+Tool names: the Galaxium repository's own Bob hooks (edish-github/galaxium-travels,
+.bob/hooks/) match write_file, apply_diff, search_and_replace and insert_content as
+Bob 2.0's write tools, and execute_command for the shell.
 """
 
 from __future__ import annotations
@@ -32,6 +36,8 @@ def payload(event: str, tool: str, args: dict, shape: str) -> dict:
 
 
 def run(script: Path, cwd: Path, data: dict) -> subprocess.CompletedProcess[str]:
+    # Without this, a missing script "passes" the block tests: python exits 2 when it can't open a file.
+    assert script.exists(), f"{script} is missing"
     return subprocess.run([sys.executable, str(script)], input=json.dumps(data), cwd=cwd, capture_output=True, text=True, timeout=20)
 
 
@@ -44,11 +50,14 @@ def active(tmp_path: Path) -> Path:
 
 SHAPES = ["documented", "runtime"]
 BLOCKED = [
+    ("write_file", {"path": "app/models.py", "content": "x = 1\n"}),
     ("write_to_file", {"path": "app/models.py", "content": "x = 1\n"}),
+    ("search_and_replace", {"path": "app/models.py", "search": "a", "replace": "b"}),
     ("apply_diff", {"path": "app/models.py", "diff": "<<<<<<< SEARCH\n=======\n>>>>>>> REPLACE"}),
     ("insert_content", {"path": "app/models.py", "line": 1, "content": "x"}),
     ("execute_command", {"command": "git commit -am sneaky"}),
     ("use_mcp_tool", {"server_name": "github", "tool_name": "create_or_update_file", "arguments": {}}),
+    ("switch_mode", {"mode_slug": "code"}),
 ]
 ALLOWED = [
     ("read_file", {"path": "app/models.py"}),
@@ -56,6 +65,8 @@ ALLOWED = [
     ("search_files", {"path": ".", "regex": "Tier"}),
     ("update_todo_list", {"todos": "[ ] propose"}),
     ("use_mcp_tool", {"server_name": "cleave", "tool_name": "cleave_status", "arguments": {}}),
+    ("ask_followup_question", {"question": "Which base branch?"}),
+    ("attempt_completion", {"result": "Stack verified."}),
 ]
 
 
