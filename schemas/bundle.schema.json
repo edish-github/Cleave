@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/edish-github/Cleave/main/schemas/bundle.schema.json",
+  "title": "Bundle",
+  "description": "What `cleave push` sends to POST /api/ingest/bundle: one JSON document holding a finished run's manifest and artifacts. Send it gzip-encoded for large diffs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "kind",
+    "run_id",
+    "source",
+    "repo",
+    "title",
+    "created_at",
+    "atoms",
+    "graph",
+    "plans",
+    "report",
+    "events"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "cleave.bundle"
+    },
+    "run_id": {
+      "$ref": "./report.schema.json#/$defs/run_id"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "ide",
+        "runner"
+      ]
+    },
+    "run_kind": {
+      "type": "string",
+      "enum": [
+        "cleave",
+        "baseline_b1"
+      ],
+      "default": "cleave"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "repo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "full_name"
+      ],
+      "properties": {
+        "full_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "default_branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "pull_request": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "number",
+            "head_branch",
+            "base_branch"
+          ],
+          "properties": {
+            "number": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "head_branch": {
+              "type": "string"
+            },
+            "base_branch": {
+              "type": "string"
+            },
+            "author": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "eval": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "group",
+            "dataset"
+          ],
+          "properties": {
+            "group": {
+              "type": "string"
+            },
+            "dataset": {
+              "type": "string"
+            },
+            "ground_truth": {
+              "type": [
+                "object",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "atoms": {
+      "$ref": "./atom.schema.json"
+    },
+    "graph": {
+      "$ref": "./graph.schema.json"
+    },
+    "plans": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "./plan.schema.json"
+      }
+    },
+    "report": {
+      "$ref": "./report.schema.json"
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "./event.schema.json"
+      }
+    }
+  }
+}
