@@ -2,6 +2,7 @@ import { ChevronRight, FolderGit2, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageContainer, PageHeader } from "@/components/layout/PageHeader";
+import { ConnectRepository } from "@/components/repository/ConnectRepository";
 import { BackendRequiredButton } from "@/components/ui/BackendRequired";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -16,23 +17,28 @@ export const metadata: Metadata = { title: "Repositories" };
 const connectCopy = {
   title: "Connect a repository",
   description:
-    "Adding repositories uses the GitHub connection, which needs the Cleave backend. The sample workspace comes with three repositories you can split pull requests from.",
+    "Repositories come from a GitHub account. The sample workspace has three sample repositories; sign in with GitHub to connect your own.",
 };
 
 export default async function RepositoriesPage() {
-  const repositories = await api.repositories.list();
+  const [repositories, sample] = await Promise.all([api.repositories.list(), api.isSample()]);
+  const available = sample ? [] : await api.repositories.available().catch(() => []);
   const now = requestNow();
+  const connect = (variant: "primary" | "secondary") =>
+    sample ? (
+      <BackendRequiredButton variant={variant} icon={<Plus className="size-4" />} {...connectCopy}>
+        Connect repository
+      </BackendRequiredButton>
+    ) : (
+      <ConnectRepository available={available} variant={variant} />
+    );
 
   return (
     <PageContainer width="wide">
       <PageHeader
         title="Repositories"
         description="Where Cleave reads pull requests and opens stacked ones."
-        actions={
-          <BackendRequiredButton variant="secondary" icon={<Plus className="size-4" />} {...connectCopy}>
-            Connect repository
-          </BackendRequiredButton>
-        }
+        actions={connect("secondary")}
       />
 
       {repositories.length ? (
@@ -51,7 +57,7 @@ export default async function RepositoriesPage() {
                 </div>
                 <p className="mt-5 truncate text-[16px] font-medium text-ink">{repo.name}</p>
                 <p className="mt-0.5 truncate text-[13px] text-ink-3">
-                  {repo.owner} · {repo.language} · {repo.framework}
+                  {[repo.owner, repo.language, repo.framework].filter(Boolean).join(" · ")}
                 </p>
                 <dl className="mt-6 grid grid-cols-3 gap-3 border-t border-line pt-4 text-[13px]">
                   <div>
@@ -80,11 +86,7 @@ export default async function RepositoriesPage() {
           <EmptyState
             title="No repositories yet"
             description="Connect GitHub and choose the repositories Cleave may read and open pull requests on."
-            action={
-              <BackendRequiredButton variant="primary" icon={<Plus className="size-4" />} {...connectCopy}>
-                Connect repository
-              </BackendRequiredButton>
-            }
+            action={connect("primary")}
           />
         </Card>
       )}

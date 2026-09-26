@@ -28,10 +28,21 @@ export default async function RepositoryPage({ params }: { params: Params }) {
   const repo = await api.repositories.get(repoId);
   if (!repo) notFound();
 
-  const [pullRequests, stacks] = await Promise.all([
-    api.repositories.pullRequests(repo.id),
+  const [pulls, stacks, sample, hasGitHub] = await Promise.all([
+    api.repositories.pullRequests(repo.id).then(
+      (list) => ({ list, error: null }),
+      (e: unknown) => ({ list: [], error: e instanceof Error ? e.message : "GitHub didn't answer." }),
+    ),
     api.stacks.forRepository(repo.id),
+    api.isSample(),
+    api.hasGitHub(),
   ]);
+  const pullRequests = pulls.list;
+  const pullsNote = pulls.error
+    ? `GitHub didn't list the open pull requests: ${pulls.error}`
+    : !sample && !hasGitHub
+      ? "Signed in without GitHub, so open pull requests can't be listed."
+      : null;
   const now = requestNow();
   const bySize = [...pullRequests].sort((a, b) => b.additions + b.deletions - (a.additions + a.deletions));
   const largest = Math.max(...bySize.map((p) => p.additions + p.deletions), 1);
@@ -48,7 +59,7 @@ export default async function RepositoryPage({ params }: { params: Params }) {
             {repo.connection === "sample" ? <Badge>Sample</Badge> : <Badge tone="ok" dot>Connected</Badge>}
           </span>
         }
-        description={`${repo.fullName} · ${repo.language} · ${repo.framework} · default branch ${repo.defaultBranch}`}
+        description={[repo.fullName, repo.language, repo.framework, `default branch ${repo.defaultBranch}`].filter(Boolean).join(" · ")}
         actions={
           <ButtonLink href={routes.newSplit(repo.id)} icon={<Plus className="size-4" />}>
             New split
@@ -116,7 +127,10 @@ export default async function RepositoryPage({ params }: { params: Params }) {
               </ul>
             ) : (
               <Card>
-                <EmptyState title="No open pull requests" description="New pull requests appear here as soon as GitHub reports them." />
+                <EmptyState
+                  title={pullsNote ? "Pull requests unavailable" : "No open pull requests"}
+                  description={pullsNote ?? "New pull requests appear here as soon as GitHub reports them."}
+                />
               </Card>
             )}
           </Section>
