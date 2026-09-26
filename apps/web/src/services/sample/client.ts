@@ -173,6 +173,19 @@ export const sampleClient: CleaveClient = {
       return spec ? toRepository(spec, now) : null;
     }),
 
+    async pullRequestAreas(repoId, prNumber) {
+      const prs = await sampleClient.repositories.pullRequests(repoId);
+      return prs.find((p) => p.number === prNumber)?.areas ?? [];
+    },
+
+    async available() {
+      return [];
+    },
+
+    async connect() {
+      throw new Error("Connecting repositories needs a GitHub account. Sign in with GitHub to connect one.");
+    },
+
     pullRequests: cache(async (repoId: string): Promise<PullRequest[]> => {
       const { built, now } = await loadWorkspace();
       const repo = repositorySpecs.find((r) => r.id === repoId);
@@ -212,6 +225,10 @@ export const sampleClient: CleaveClient = {
   },
 
   stacks: {
+    async ciStatus() {
+      // No GitHub in the sample workspace: published pull requests there are illustrative.
+      return {};
+    },
     list: listStacks,
     get: getStack,
 

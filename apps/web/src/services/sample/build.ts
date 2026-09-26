@@ -69,7 +69,7 @@ function timeline(spec: StackSpec, state: SampleState, now: number): Timeline | 
   const run = state.runs[spec.id];
   if (spec.onDemand && run === undefined) return null;
   const startedAt = run ?? now - spec.runStartedMinutesAgo * MINUTE;
-  const duration = run !== undefined ? ANALYSIS_MS : spec.bob.durationSec * 1000;
+  const duration = run !== undefined ? ANALYSIS_MS : (spec.bob.durationSec ?? 0) * 1000;
   const completedAt = startedAt + duration;
   const analyzing = run !== undefined && now < completedAt;
   const resolvedAt = state.resolved[spec.id] ?? null;
@@ -472,7 +472,7 @@ function buildActivity(
     tool: "explore",
     fields: [
       { label: "Subagents", value: `${spec.bob.subagents} × explore` },
-      { label: "Atoms per subagent", value: `~${Math.ceil(stack.atoms.length / spec.bob.subagents)}` },
+      { label: "Atoms per subagent", value: `~${Math.ceil(stack.atoms.length / (spec.bob.subagents || 1))}` },
     ],
     code: null,
   });

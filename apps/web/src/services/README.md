@@ -1,35 +1,30 @@
 # Services
 
-Pages and server actions talk to exactly one object: `api` from `src/services/index.ts`.
-It implements `CleaveClient` (`./types.ts`). Nothing under `src/app` or `src/components`
-imports sample data directly.
+Pages and server actions talk to one object: `api` from `src/services/index.ts`. It
+implements the `CleaveClient` contract (`./types.ts`) and picks a client per request:
 
 ```
-page / server action ──► api (CleaveClient) ──► sample/client.ts   (today)
-                                             └► http/client.ts     (backend, not written yet)
+page / server action ──► api ──► live/client.ts     signed in with GitHub, DATABASE_URL set
+                                └► sample/client.ts   everyone else (labelled sample workspace)
 ```
 
-## Sample workspace (`./sample`)
+`api.isSample()` tells pages which one served the request, so they can label sample data.
+Public proof pages use `getPublicStack(id)`: a public live stack first, else a public sample
+stack (labelled). A private live stack never falls back to a sample stack with the same id.
 
-- `data/` holds the dataset as compact specs: three repositories, six open pull requests
-  and six stacks. The flagship is `galaxium-travels-184` (5 layers, 37 atoms, 12 dependencies).
-- `build.ts` expands a spec into the full `Stack` model: ids, totals, layer stats, the five
-  checks, verification rounds, repairs and the activity timeline. Every page reads the same numbers.
-- `state.ts` keeps what the visitor did (started a run, published, resolved a review, sharing,
-  profile name) in an httpOnly cookie, so it works on serverless hosting with no database.
-- Reads wait `SAMPLE_LATENCY_MS` (default 280 ms) so loading states behave like a real backend.
-- Starting a split replays the recorded run: the stack is "analyzing" for 14 s, computed on the
-  server from the start time, then shows the recorded result. The UI says so.
+## Live (`./live`)
 
-## Adding the backend client
+- `client.ts` reads the signed-in user's repositories, stacks, runs and events from Postgres.
+- `map.ts` turns rows (engine contracts from `/schemas`) into the view models pages render.
+- Runs arrive through `POST /api/ingest/bundle` (`src/server/ingest.ts`), sent by `cleave push`.
+- Actions that need the user's machine (start a split, publish, merge layers after review)
+  throw `NeedsRunnerError` with the exact command to run instead. The runner (P1) replaces them.
 
-1. Create `./http/client.ts` exporting an object that implements `CleaveClient`, with
-   `source: "api"`. Map each method to the routes in the routes doc (section 6):
-   stacks and runs from Postgres, `POST /api/ingest/bundle` for `cleave push`, runner endpoints
-   for live runs, Auth.js for the session.
-2. In `./index.ts`, return it when `CLEAVE_DATA_SOURCE=api`.
-3. Generate `src/lib/types.ts` from `/schemas/*.schema.json` instead of editing it by hand.
-4. With `source: "api"`, the "Sample workspace" labels disappear and the GitHub-only buttons
-   (`BackendRequiredButton`) should be swapped for their real actions.
+## Sample (`./sample`)
 
-No page or component changes are needed for steps 1–3.
+- `data/`: three repositories, six pull requests, six stacks, as compact specs.
+- `build.ts` derives every number from the specs; `state.ts` keeps visitor actions in a cookie.
+- Starting a split replays a recorded run (14 s), and the UI says so.
+
+`scripts/export-sample-bundle.ts` exports a sample stack as a push bundle
+(`test/fixtures/sample-bundle.json`) to exercise ingest and the live pages end to end.

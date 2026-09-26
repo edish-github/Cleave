@@ -1,5 +1,7 @@
 import type {
   ActivityEvent,
+  AvailableRepository,
+  CiState,
   Layer,
   PullRequest,
   Repository,
@@ -41,6 +43,11 @@ export interface CleaveClient {
     list(): Promise<RepositorySummary[]>;
     get(repoId: string): Promise<Repository | null>;
     pullRequests(repoId: string): Promise<PullRequest[]>;
+    /** Top-level areas a pull request touches. */
+    pullRequestAreas(repoId: string, prNumber: number): Promise<string[]>;
+    /** GitHub repositories the user could connect. Empty when GitHub isn't linked. */
+    available(): Promise<AvailableRepository[]>;
+    connect(fullName: string): Promise<{ repoId: string }>;
   };
 
   stacks: {
@@ -55,6 +62,8 @@ export interface CleaveClient {
     publish(stackId: string): Promise<{ stackId: string }>;
     resolveReview(stackId: string, resolutionId: "merge"): Promise<{ stackId: string }>;
     setVisibility(stackId: string, visibility: Visibility): Promise<void>;
+    /** CI state of each published layer's pull request, keyed by layer index. */
+    ciStatus(stackId: string): Promise<Record<number, CiState>>;
   };
 
   activity: {
