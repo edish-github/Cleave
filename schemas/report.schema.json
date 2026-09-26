@@ -1,0 +1,636 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/edish-github/Cleave/main/schemas/report.schema.json",
+  "title": "Report",
+  "description": "report.json: the outcome of one run. The overview, the proof page and /results all read the checks from here.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "run_id",
+    "status",
+    "command",
+    "base_sha",
+    "head_sha",
+    "head_tree",
+    "top_tree",
+    "foreign_lines",
+    "plan_version",
+    "checks",
+    "layers",
+    "rounds",
+    "repairs",
+    "hook",
+    "started_at",
+    "finished_at"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "run_id": {
+      "$ref": "#/$defs/run_id"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "verified",
+        "review",
+        "failed"
+      ],
+      "description": "verified: all five checks pass. review: a layer can't pass on its own after the repair limit. failed: the run stopped with an error."
+    },
+    "error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "command": {
+      "type": "string",
+      "description": "Check command every layer ran, e.g. `pytest -q`."
+    },
+    "setup_command": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "working_directory": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "base_sha": {
+      "$ref": "./atom.schema.json#/$defs/sha"
+    },
+    "head_sha": {
+      "$ref": "./atom.schema.json#/$defs/sha"
+    },
+    "head_tree": {
+      "$ref": "./atom.schema.json#/$defs/sha"
+    },
+    "top_tree": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "Tree of the last layer. Equal to head_tree when fidelity holds."
+    },
+    "foreign_lines": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Lines in the stack that are not in the original diff. Must be 0."
+    },
+    "plan_version": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "The plan version this report verifies."
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "$ref": "#/$defs/check"
+      }
+    },
+    "layers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/layer_result"
+      }
+    },
+    "rounds": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/round"
+      }
+    },
+    "repairs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/repair"
+      }
+    },
+    "issue": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/issue"
+        }
+      ]
+    },
+    "hook": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed",
+        "blocked"
+      ],
+      "properties": {
+        "allowed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blocked": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "bob": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/bob_stats"
+        }
+      ]
+    },
+    "publish": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/publish"
+        }
+      ]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "run_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{5,63}$"
+    },
+    "check_id": {
+      "type": "string",
+      "enum": [
+        "coverage",
+        "order",
+        "fidelity",
+        "shippability",
+        "partition"
+      ],
+      "description": "coverage: every atom in exactly one layer. order: no edge points to a later layer. fidelity: top tree = head tree. shippability: every prefix passes the check command. partition: no new code (foreign_lines = 0, no source edit allowed by the hook)."
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "status",
+        "value",
+        "detail"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/check_id"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "attention"
+          ]
+        },
+        "value": {
+          "type": "string",
+          "description": "Short value shown beside the check, e.g. `37 / 37` or `Identical`."
+        },
+        "detail": {
+          "type": "string",
+          "description": "One line of evidence."
+        }
+      }
+    },
+    "layer_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index",
+        "name",
+        "atoms",
+        "added",
+        "removed",
+        "files",
+        "branch",
+        "status"
+      ],
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "rationale": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "atoms": {
+          "type": "array",
+          "items": {
+            "$ref": "./atom.schema.json#/$defs/atom_id"
+          }
+        },
+        "added": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "removed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "branch": {
+          "type": "string",
+          "description": "cleave/<slug>/<index>-<layer-slug>"
+        },
+        "commit_sha": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "tree_sha": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail"
+          ]
+        },
+        "tests_passed": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "tests_failed": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "duration_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Pull request text for this layer."
+        }
+      }
+    },
+    "round": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "round",
+        "plan_version",
+        "results"
+      ],
+      "properties": {
+        "round": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "plan_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/check_result"
+          }
+        }
+      }
+    },
+    "check_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layer",
+        "status",
+        "duration_ms"
+      ],
+      "properties": {
+        "layer": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "error",
+            "timeout"
+          ]
+        },
+        "tests_passed": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "tests_failed": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failure": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "test",
+                "message"
+              ],
+              "properties": {
+                "test": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "log_excerpt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 8000
+        }
+      }
+    },
+    "repair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "round",
+        "atom",
+        "from_layer",
+        "to_layer",
+        "reason"
+      ],
+      "properties": {
+        "round": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The round that verified this repair."
+        },
+        "atom": {
+          "$ref": "./atom.schema.json#/$defs/atom_id"
+        },
+        "from_layer": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "to_layer": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layer",
+        "test",
+        "expected",
+        "found",
+        "explanation",
+        "resolution"
+      ],
+      "properties": {
+        "layer": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "test": {
+          "type": "string"
+        },
+        "expected": {
+          "type": "string"
+        },
+        "found": {
+          "type": "string"
+        },
+        "log_excerpt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 8000
+        },
+        "explanation": {
+          "type": "string"
+        },
+        "resolution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "into",
+            "from",
+            "name"
+          ],
+          "properties": {
+            "kind": {
+              "const": "merge"
+            },
+            "into": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "from": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "bob_stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "surface",
+        "mode"
+      ],
+      "properties": {
+        "surface": {
+          "type": "string",
+          "enum": [
+            "ide",
+            "bob_run"
+          ]
+        },
+        "mode": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bobcoins": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "tokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "tool_calls": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "mcp_calls": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "subagents": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "duration_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "publish": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "published_at",
+        "method",
+        "pull_requests"
+      ],
+      "properties": {
+        "published_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "stacked",
+            "chained"
+          ]
+        },
+        "pull_requests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "layer",
+              "number",
+              "url",
+              "base"
+            ],
+            "properties": {
+              "layer": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "number": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "base": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
