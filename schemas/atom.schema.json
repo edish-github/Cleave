@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/edish-github/Cleave/main/schemas/atom.schema.json",
+  "title": "AtomsFile",
+  "description": "atoms.json: the pull request cut into atoms. An atom is the smallest unit Cleave moves between layers: one hunk, or one whole file for new, deleted, renamed, binary or mode-only changes. Atoms are never edited.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "base_sha",
+    "head_sha",
+    "head_tree",
+    "atoms"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "base_sha": {
+      "$ref": "#/$defs/sha"
+    },
+    "head_sha": {
+      "$ref": "#/$defs/sha"
+    },
+    "head_tree": {
+      "$ref": "#/$defs/sha",
+      "description": "Tree hash of head. The last layer must reproduce it exactly."
+    },
+    "atoms": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/atom"
+      }
+    }
+  },
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "atom_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{12}$",
+      "description": "First 12 hex chars of sha256(file path + NUL + patch text). Stable across runs of the same diff."
+    },
+    "atom_kind": {
+      "type": "string",
+      "enum": [
+        "hunk",
+        "new_file",
+        "deleted_file",
+        "rename",
+        "binary",
+        "mode"
+      ]
+    },
+    "atom": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "file",
+        "kind",
+        "added",
+        "removed",
+        "patch",
+        "is_test"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/atom_id"
+        },
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path in head (or in base for deleted files), relative to the repo root."
+        },
+        "old_file": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Previous path for renames, else null."
+        },
+        "kind": {
+          "$ref": "#/$defs/atom_kind"
+        },
+        "old_start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "old_len": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "new_start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "new_len": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "added": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "removed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "patch": {
+          "type": "string",
+          "description": "Verbatim diff text for this atom: the @@ hunk for text changes, or the whole-file section (including `GIT binary patch` for binary files) for whole-file atoms. Applying it with `git apply --cached --unidiff-zero` must work."
+        },
+        "is_test": {
+          "type": "boolean"
+        },
+        "symbols": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "description": "Names this atom defines and references, filled by the graph step.",
+          "properties": {
+            "defines": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "references": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
