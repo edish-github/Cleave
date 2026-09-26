@@ -8,15 +8,139 @@ statements), ``call`` (function use), ``model`` (class or attribute use).
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
+from ..gitio import git
 from ..models import Atom, AtomsFile, Edge, Symbols
 
 
 def symbols_for(source: str, atom: Atom) -> Symbols:
     """Names the atom's added lines define and reference, given the file's head source."""
-    raise NotImplementedError
+    try:
+        tree = ast.parse(source)
+    except Exception:
+        return Symbols(defines=[], references=[])
+
+    num_lines = len(source.splitlines())
+    lines = (
+        range(atom.new_start, atom.new_start + max(atom.new_len, 1))
+        if atom.kind == "hunk"
+        else range(1, num_lines + 1)
+    )
+
+    defines: set[str] = set()
+    references: set[str] = set()
+
+    for n in ast.walk(tree):
+        lineno = getattr(n, "lineno", None)
+        if lineno is not None and lineno in lines:
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                defines.add(n.name)
+            elif isinstance(n, ast.Assign):
+                for t in n.targets:
+                    if isinstance(t, ast.Name):
+                        defines.add(t.id)
+            elif isinstance(n, ast.AnnAssign):
+                if isinstance(n.target, ast.Name):
+                    defines.add(n.target.id)
+            elif isinstance(n, (ast.Import, ast.ImportFrom)):
+                for alias in n.names:
+                    defines.add(alias.asname or alias.name)
+
+            if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load):
+                references.add(n.id)
+            elif isinstance(n, ast.Attribute) and isinstance(n.ctx, ast.Load):
+                references.add(n.attr)
+
+    return Symbols(defines=sorted(defines), references=sorted(references))
 
 
 def edges(repo: Path, atoms: AtomsFile) -> list[Edge]:
-    raise NotImplementedError
+    res: list[Edge] = []
+    seen: set[tuple[str, str, str]] = set()
+
+    # Load head sources and compute symbols for all atoms
+    head_sources: dict[str, str] = {}
+    for a in atoms.atoms:
+        if not a.file.endswith(".py") or a.kind == "deleted_file":
+            continue
+        if a.file not in head_sources:
+            try:
+                head_sources[a.file] = git(repo, "show", f"{atoms.head_sha}:{a.file}")
+            except Exception:
+                continue
+        a.symbols = symbols_for(head_sources[a.file], a)
+
+    # 1. Imports across files
+    for a in atoms.atoms:
+        if not a.file.endswith(".py") or a.kind == "deleted_file":
+            continue
+        src = head_sources.get(a.file)
+        if not src:
+            continue
+        try:
+            tree = ast.parse(src)
+        except Exception:
+            continue
+
+        num_lines = len(src.splitlines())
+        lines = (
+            range(a.new_start, a.new_start + max(a.new_len, 1))
+            if a.kind == "hunk"
+            else range(1, num_lines + 1)
+        )
+
+        for n in ast.walk(tree):
+            if isinstance(n, ast.ImportFrom) and n.lineno in lines and n.module:
+                mod_file = n.module.replace(".", "/") + ".py"
+                mod_init = n.module.replace(".", "/") + "/__init__.py"
+                for alias in n.names:
+                    name = alias.name
+                    for other in atoms.atoms:
+                        if other.id == a.id:
+                            continue
+                        if other.file in (mod_file, mod_init):
+                            if other.kind == "new_file" or (other.symbols and name in other.symbols.defines):
+                                key = (a.id, other.id, "import")
+                                if key not in seen:
+                                    seen.add(key)
+                                    res.append(
+                                        Edge(
+                                            **{
+                                                "from": a.id,
+                                                "to": other.id,
+                                                "kind": "import",
+                                                "symbol": name,
+                                                "source": "static",
+                                            }
+                                        )
+                                    )
+
+    # 2. Within same file
+    for a in atoms.atoms:
+        if not a.symbols:
+            continue
+        for ref in a.symbols.references:
+            for other in atoms.atoms:
+                if other.id == a.id or other.file != a.file:
+                    continue
+                if other.symbols and ref in other.symbols.defines:
+                    kind = "model" if (ref and ref[0].isupper() and "_" not in ref) else "call"
+                    key = (a.id, other.id, kind)
+                    if key not in seen:
+                        seen.add(key)
+                        res.append(
+                            Edge(
+                                **{
+                                    "from": a.id,
+                                    "to": other.id,
+                                    "kind": kind,
+                                    "symbol": ref,
+                                    "source": "static",
+                                }
+                            )
+                        )
+
+    return res
+
