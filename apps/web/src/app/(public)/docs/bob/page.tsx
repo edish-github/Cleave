@@ -155,6 +155,12 @@ export default function BobDocsPage() {
               from the repository&apos;s Bobcoin setting.
             </p>
             <CodeBlock title="Terminal" code={commands.headless} wrap />
+            <p>
+              To start splits from the web app instead, keep a runner going on your machine. It asks for runs you queue on
+              New split, runs each one with the command above, streams its events to the run&apos;s page and sends the
+              finished bundle, exactly like <code>cleave push</code>.
+            </p>
+            <CodeBlock title="Terminal" code={`export CLEAVE_URL=<your deployment> CLEAVE_TOKEN=clv_…\n${commands.runner}`} wrap />
             <div className="flex flex-col gap-3 rounded-2xl border border-line bg-surface px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[14px] text-ink-2">See what a finished run looks like.</p>
               <div className="flex gap-2">

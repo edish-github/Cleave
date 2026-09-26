@@ -308,3 +308,47 @@ export interface SearchItem {
 }
 
 export type ThemePreference = "light" | "dark" | "system";
+
+/** A split started from the browser and run by one of the user's runners. */
+export type RunJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+
+export interface RunJobSummary {
+  id: string;
+  repoId: string;
+  repoFullName: string;
+  prNumber: number;
+  title: string;
+  status: RunJobStatus;
+  createdAt: string;
+  finishedAt: string | null;
+  /** The stack the finished run landed in. */
+  stackId: string | null;
+}
+
+export interface RunJob extends RunJobSummary {
+  headBranch: string;
+  baseBranch: string;
+  runnerName: string | null;
+  claimedAt: string | null;
+  /** Last time the runner reported anything for this job. */
+  lastSeenAt: string | null;
+  error: string | null;
+  config: {
+    checkCommand: string;
+    setupCommand: string | null;
+    workingDirectory: string;
+    maxLayerLines: number;
+    maxRepairRounds: number;
+    bobcoinCap: number;
+  };
+  events: ActivityEvent[];
+}
+
+export interface RunnerInfo {
+  id: string;
+  name: string;
+  lastSeenAt: string | null;
+  bobVersion: string | null;
+  os: string | null;
+  online: boolean;
+}

@@ -86,5 +86,5 @@ export const commands = {
   headless: 'bob run --mode cleave --format stream-json --max-cost 3 "Cleave feat/loyalty-and-seat-upgrades onto main"',
   push: 'cleave push --title "<pull request title>" --pr <number> --head-branch <branch> --base-branch main',
   publish: "cleave publish",
-  runner: "cleave runner --token $CLEAVE_RUNNER_TOKEN",
+  runner: "cleave runner",
 };

@@ -1,12 +1,13 @@
 import { Check, FolderGit2, GitBranch } from "lucide-react";
 import Link from "next/link";
 import { CodeBlock } from "@/components/docs/CodeBlock";
+import { RunOnRunner } from "@/components/runs/RunOnRunner";
 import { ButtonLink } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/cn";
 import { formatNumber, plural } from "@/lib/format";
 import { routes } from "@/lib/site";
-import type { PullRequest, RepositorySummary } from "@/lib/types";
+import type { PullRequest, RepositorySummary, RunJobSummary, RunnerInfo } from "@/lib/types";
 
 export interface LivePullRequest extends PullRequest {
   openedLabel: string;
@@ -27,6 +28,8 @@ export function LiveSplitPicker({
   selectedPr,
   areas,
   pullsNote,
+  runners,
+  latestRun,
   siteUrl,
 }: {
   repositories: RepositorySummary[];
@@ -36,6 +39,9 @@ export function LiveSplitPicker({
   areas: string[];
   /** Why the pull request list is empty when it isn't GitHub's answer (no token, GitHub error). */
   pullsNote: string | null;
+  runners: RunnerInfo[];
+  /** The newest browser-started run of the selected pull request. */
+  latestRun: RunJobSummary | null;
   siteUrl: string;
 }) {
   if (!repositories.length) {
@@ -170,7 +176,7 @@ export function LiveSplitPicker({
         <div className="rounded-2xl border border-line bg-surface shadow-card">
           <div className="flex items-center gap-3 border-b border-line px-5 py-4">
             <Step n={3} done={false} />
-            <h2 className="text-[15px] font-medium text-ink">Split it in Bob IDE</h2>
+            <h2 className="text-[15px] font-medium text-ink">Run the split</h2>
           </div>
           {selectedPr && selectedRepo ? (
             <div className="space-y-5 px-5 py-5">
@@ -192,6 +198,8 @@ export function LiveSplitPicker({
                   </ul>
                 ) : null}
               </div>
+              <RunOnRunner repoId={selectedRepo.id} prNumber={selectedPr.number} runners={runners} latest={latestRun} siteUrl={siteUrl} />
+              <p className="border-t border-line pt-5 text-[14px] font-medium text-ink">Or split it in Bob IDE</p>
               <Command n={1} title="In a clean checkout of the repository" code={init} />
               <Command n={2} title="In Bob IDE, switch to ✂ Cleave and send" code={message} label="Message to Bob" />
               <Command n={3} title="When the run finishes" code={push} />

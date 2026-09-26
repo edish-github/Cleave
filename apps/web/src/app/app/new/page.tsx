@@ -42,12 +42,18 @@ export default async function NewSplitPage({
           .map(withLabel)
       : [];
     const selectedPr = prs.find((p) => p.number === prParam) ?? null;
-    const areas = selectedRepo && selectedPr ? await api.repositories.pullRequestAreas(selectedRepo.id, selectedPr.number) : [];
+    const [areas, runners, recentRuns] = await Promise.all([
+      selectedRepo && selectedPr ? api.repositories.pullRequestAreas(selectedRepo.id, selectedPr.number) : [],
+      api.runs.runners(),
+      api.runs.recent(50),
+    ]);
+    const latestRun =
+      (selectedRepo && selectedPr && recentRuns.find((r) => r.repoId === selectedRepo.id && r.prNumber === selectedPr.number)) || null;
     return (
       <PageContainer width="wide">
         <PageHeader
           title="New split"
-          description="Pick a pull request. The split runs in Bob IDE on your machine, and the finished run lands here with its proof."
+          description="Pick a pull request. The split runs on your machine, through your runner or in Bob IDE, and the finished run lands here with its proof."
         />
         <LiveSplitPicker
           repositories={repositories}
@@ -56,6 +62,8 @@ export default async function NewSplitPage({
           selectedPr={selectedPr}
           areas={areas}
           pullsNote={pullsNote}
+          runners={runners}
+          latestRun={latestRun}
           siteUrl={site.url}
         />
       </PageContainer>

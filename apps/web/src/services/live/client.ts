@@ -2,9 +2,20 @@ import "server-only";
 import { and, asc, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { cache } from "react";
 import type * as C from "@/lib/contracts";
-import type { ActivityEvent, CiState, PullRequest, SearchItem, Stack, StackSummary } from "@/lib/types";
+import type {
+  ActivityEvent,
+  CiState,
+  PullRequest,
+  RunJob,
+  RunJobSummary,
+  RunnerInfo,
+  SearchItem,
+  Stack,
+  StackSummary,
+} from "@/lib/types";
 import { db, schema } from "@/server/db/client";
-import { ciState, countOpenPulls, getRepo, listOpenPulls, listUserRepos, pullAreas } from "@/server/github";
+import { ciState, countOpenPulls, getPull, getRepo, listOpenPulls, listUserRepos, pullAreas } from "@/server/github";
+import { jobEvents, newJobId, RUNNER_ONLINE_MS } from "@/server/jobs";
 import type { CleaveClient } from "../types";
 import { toActivity, toRepository, toStack, toSummary, toUser } from "./map";
 
@@ -137,6 +148,20 @@ export const loadStack = cache(async (stackId: string, userId: string | null): P
 });
 
 export class NeedsGitHubError extends Error {}
+
+function jobSummary(job: typeof schema.jobs.$inferSelect, repoFullName: string): RunJobSummary {
+  return {
+    id: job.id,
+    repoId: job.repositoryId,
+    repoFullName,
+    prNumber: job.prNumber,
+    title: job.title,
+    status: job.status,
+    createdAt: job.createdAt.toISOString(),
+    finishedAt: job.finishedAt?.toISOString() ?? null,
+    stackId: job.stackId,
+  };
+}
 
 export function createLiveClient(
   userId: string,
@@ -318,7 +343,7 @@ export function createLiveClient(
       },
       async start() {
         throw new NeedsRunnerError(
-          "Live runs start in Bob IDE for now: switch to ✂ Cleave, split the branch, then run `cleave push`. Starting from the browser arrives with the runner.",
+          "Live splits run on your machine: start one from New split with `cleave runner` running, or in Bob IDE with ✂ Cleave followed by `cleave push`.",
         );
       },
       async publish() {
@@ -347,6 +372,104 @@ export function createLiveClient(
       async setVisibility(stackId, visibility) {
         if (!(await ownsStack(stackId))) throw new Error("Stack not found");
         await db().update(schema.stacks).set({ visibility }).where(eq(schema.stacks.id, stackId));
+      },
+    },
+
+    runs: {
+      async start({ repoId, prNumber }) {
+        const repo = (await repoRows()).find((r) => r.id === repoId);
+        if (!repo) throw new Error("Repository not found.");
+        const pull = await getPull(token(), repo.fullName, prNumber);
+        if (pull.state && pull.state !== "open") throw new Error(`Pull request #${prNumber} is ${pull.state}.`);
+        const config = toRepository(repo).config;
+        const id = newJobId();
+        await db()
+          .insert(schema.jobs)
+          .values({
+            id,
+            userId,
+            repositoryId: repo.id,
+            prNumber,
+            prUrl: pull.html_url,
+            prAuthor: pull.user?.login ?? null,
+            title: pull.title,
+            headBranch: pull.head.ref,
+            baseBranch: pull.base.ref,
+            config: {
+              check_command: config.checkCommand,
+              setup_command: config.setupCommand || null,
+              working_directory: config.workingDirectory || ".",
+              max_layer_lines: config.maxLayerLines,
+              max_repair_rounds: 3,
+              bobcoin_cap: config.bobcoinCap,
+            },
+          });
+        return { runId: id };
+      },
+      async get(runId): Promise<RunJob | null> {
+        const [row] = await db()
+          .select({ job: schema.jobs, repo: schema.repositories, runnerName: schema.runners.name })
+          .from(schema.jobs)
+          .innerJoin(schema.repositories, eq(schema.repositories.id, schema.jobs.repositoryId))
+          .leftJoin(schema.runners, eq(schema.runners.id, schema.jobs.runnerId))
+          .where(and(eq(schema.jobs.id, runId), eq(schema.jobs.userId, userId)))
+          .limit(1);
+        if (!row) return null;
+        const { job, repo } = row;
+        const events = await jobEvents(job.id);
+        return {
+          ...jobSummary(job, repo.fullName),
+          headBranch: job.headBranch,
+          baseBranch: job.baseBranch,
+          runnerName: row.runnerName ?? null,
+          claimedAt: job.claimedAt?.toISOString() ?? null,
+          lastSeenAt: job.lastSeenAt?.toISOString() ?? null,
+          error: job.error,
+          config: {
+            checkCommand: job.config.check_command,
+            setupCommand: job.config.setup_command ?? null,
+            workingDirectory: job.config.working_directory,
+            maxLayerLines: job.config.max_layer_lines,
+            maxRepairRounds: job.config.max_repair_rounds,
+            bobcoinCap: job.config.bobcoin_cap,
+          },
+          // Newest first, like the stack's Activity tab.
+          events: events.map((e) => toActivity(e, job.stackId ?? job.id)).reverse(),
+        };
+      },
+      async recent(limit): Promise<RunJobSummary[]> {
+        const rows = await db()
+          .select({ job: schema.jobs, fullName: schema.repositories.fullName })
+          .from(schema.jobs)
+          .innerJoin(schema.repositories, eq(schema.repositories.id, schema.jobs.repositoryId))
+          .where(eq(schema.jobs.userId, userId))
+          .orderBy(desc(schema.jobs.createdAt))
+          .limit(limit);
+        return rows.map((r) => jobSummary(r.job, r.fullName));
+      },
+      async cancel(runId) {
+        const [row] = await db()
+          .update(schema.jobs)
+          .set({ status: "cancelled", finishedAt: new Date(), error: "Cancelled from the browser." })
+          .where(and(eq(schema.jobs.id, runId), eq(schema.jobs.userId, userId), inArray(schema.jobs.status, ["queued", "running"])))
+          .returning({ id: schema.jobs.id });
+        if (!row) throw new Error("This run has already finished.");
+      },
+      async runners(): Promise<RunnerInfo[]> {
+        const rows = await db()
+          .select()
+          .from(schema.runners)
+          .where(and(eq(schema.runners.userId, userId), isNull(schema.runners.revokedAt)))
+          .orderBy(desc(schema.runners.lastSeenAt));
+        const now = Date.now();
+        return rows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          lastSeenAt: r.lastSeenAt?.toISOString() ?? null,
+          bobVersion: r.bobVersion,
+          os: r.os,
+          online: Boolean(r.lastSeenAt && now - r.lastSeenAt.getTime() < RUNNER_ONLINE_MS),
+        }));
       },
     },
 

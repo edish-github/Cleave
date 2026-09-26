@@ -396,7 +396,7 @@ function fieldsOf(p: Payload): { label: string; value: string }[] {
     .map(([k, v]) => ({ label: k.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()), value: String(v) }));
 }
 
-export function toActivity(row: EventRow, stackId: string): ActivityEvent {
+export function toActivity(row: Pick<EventRow, "id" | "ts" | "source" | "type" | "tool" | "payload">, stackId: string): ActivityEvent {
   const p = row.payload ?? {};
   const described = describeEvent(row.type, p, row.tool);
   const tone = ["neutral", "ok", "attention", "accent"].includes(String(p.tone)) ? (p.tone as ActivityTone) : described.tone;

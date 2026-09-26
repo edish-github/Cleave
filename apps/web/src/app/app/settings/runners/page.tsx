@@ -1,18 +1,22 @@
 import { ArrowUpRight, KeyRound } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { CodeBlock } from "@/components/docs/CodeBlock";
 import { RunnerTokens, type RunnerView } from "@/components/settings/RunnerTokens";
 import { SettingsSection } from "@/components/settings/SettingsSection";
 import { BackendRequiredButton } from "@/components/ui/BackendRequired";
 import { ButtonLink } from "@/components/ui/Button";
+import { Badge, type Tone } from "@/components/ui/Badge";
 import { Diamond } from "@/components/ui/Diamond";
 import { commands } from "@/content/bob";
 import { timeAgo } from "@/lib/format";
 import { routes, site } from "@/lib/site";
+import type { RunJobSummary } from "@/lib/types";
 import { liveSession } from "@/server/auth";
 import { db, schema } from "@/server/db/client";
 import { requestNow } from "@/server/queries";
+import { api } from "@/services";
 
 export const metadata: Metadata = { title: "Bob & runners" };
 
@@ -37,9 +41,18 @@ async function runnersFor(userId: string): Promise<RunnerView[]> {
     }));
 }
 
+const runStatus: Record<RunJobSummary["status"], { label: string; tone: Tone }> = {
+  queued: { label: "Queued", tone: "neutral" },
+  running: { label: "Running", tone: "accent" },
+  succeeded: { label: "Finished", tone: "ok" },
+  failed: { label: "Failed", tone: "bad" },
+  cancelled: { label: "Cancelled", tone: "neutral" },
+};
+
 export default async function RunnersSettingsPage() {
   const session = await liveSession();
-  const runners = session ? await runnersFor(session.user.id) : null;
+  const [runners, runs] = session ? await Promise.all([runnersFor(session.user.id), api.runs.recent(10)]) : [null, []];
+  const now = requestNow();
 
   return (
     <div className="space-y-6">
@@ -63,7 +76,7 @@ export default async function RunnersSettingsPage() {
 
       <SettingsSection
         title="Runner tokens"
-        description="A token lets cleave push (and later the runner) send runs to your account. Runs execute on your machine with your own Bob Shell login, git and gh credentials; no secrets reach Cleave."
+        description="A token lets cleave push and cleave runner send runs to your account. Runs execute on your machine with your own Bob Shell login, git and gh credentials; no secrets reach Cleave."
         footer={
           runners ? undefined : (
             <>
@@ -88,9 +101,34 @@ export default async function RunnersSettingsPage() {
         )}
         <div className="mt-4 space-y-3">
           <CodeBlock title="Send a finished run" code={`CLEAVE_URL=${site.url} CLEAVE_TOKEN=clv_… ${commands.push}`} wrap />
-          <CodeBlock title="What the runner will call (P1)" code={commands.headless} wrap />
+          <CodeBlock title="Run splits started from New split" code={`CLEAVE_URL=${site.url} CLEAVE_TOKEN=clv_… ${commands.runner}`} wrap />
+          <p className="text-[13px] text-ink-3">
+            The runner asks for queued runs, clones the repository, runs{" "}
+            <code className="font-mono text-[12px]">{commands.headless}</code> on this machine and streams events to the
+            run&apos;s page.
+          </p>
         </div>
       </SettingsSection>
+
+      {runs.length ? (
+        <SettingsSection title="Recent runs" description="Splits started from New split, newest first.">
+          <ul className="divide-y divide-line rounded-xl border border-line">
+            {runs.map((run) => (
+              <li key={run.id}>
+                <Link href={routes.run(run.id)} className="flex items-center gap-3 px-4 py-3 hover:bg-subtle/40">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-medium text-ink">{run.title}</span>
+                    <span className="block truncate text-[12px] text-ink-3">
+                      {run.repoFullName} #{run.prNumber} · {timeAgo(run.createdAt, now)}
+                    </span>
+                  </span>
+                  <Badge tone={runStatus[run.status].tone}>{runStatus[run.status].label}</Badge>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </SettingsSection>
+      ) : null}
     </div>
   );
 }

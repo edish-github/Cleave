@@ -56,6 +56,7 @@ export const api: Api = {
   user: delegate("user"),
   repositories: delegate("repositories"),
   stacks: delegate("stacks"),
+  runs: delegate("runs"),
   activity: delegate("activity"),
   search: delegate("search"),
 };
@@ -81,16 +82,51 @@ export interface FeaturedProof {
   repoFullName: string;
   prNumber: number | null;
   sample: boolean;
+  /** Numbers straight from the stack's run. */
+  stats: {
+    lines: number;
+    files: number;
+    layers: number;
+    green: number;
+    foreignLines: number;
+    treesMatch: boolean;
+    repairs: number;
+    bobcoins: number | null;
+    hookBlocked: number;
+  };
+}
+
+function featured(stack: Stack, sample: boolean): FeaturedProof {
+  const v = stack.verification;
+  return {
+    id: stack.id,
+    title: stack.title,
+    repoFullName: stack.repoFullName,
+    prNumber: stack.prNumber || null,
+    sample,
+    stats: {
+      lines: stack.additions + stack.deletions,
+      files: stack.filesChanged,
+      layers: stack.layers.length,
+      green: stack.layers.filter((l) => l.status === "pass").length,
+      foreignLines: v.foreignLines,
+      treesMatch: Boolean(v.headTree) && v.headTree === v.topTree,
+      repairs: v.repairs.length,
+      bobcoins: stack.bob.bobcoins,
+      hookBlocked: stack.bob.hookBlocked,
+    },
+  };
 }
 
 /** The proof the landing page points to: the newest public live stack, else the sample one. */
 export async function getFeaturedProof(): Promise<FeaturedProof | null> {
   if (databaseConfigured) {
     const live = await featuredLiveStack().catch(() => null);
-    if (live) return { ...live, sample: false };
+    const stack = live ? await loadStack(live.id, null).catch(() => null) : null;
+    if (stack) return featured(stack, false);
   }
   const sample = await sampleClient.stacks.getPublic("galaxium-travels-184").catch(() => null);
-  return sample ? { id: sample.id, title: sample.title, repoFullName: sample.repoFullName, prNumber: sample.prNumber, sample: true } : null;
+  return sample ? featured(sample, true) : null;
 }
 
 /** Rows for the public /results page. Empty until evaluation runs are pushed. */

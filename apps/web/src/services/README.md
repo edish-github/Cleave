@@ -17,8 +17,10 @@ stack (labelled). A private live stack never falls back to a sample stack with t
 - `client.ts` reads the signed-in user's repositories, stacks, runs and events from Postgres.
 - `map.ts` turns rows (engine contracts from `/schemas`) into the view models pages render.
 - Runs arrive through `POST /api/ingest/bundle` (`src/server/ingest.ts`), sent by `cleave push`.
-- Actions that need the user's machine (start a split, publish, merge layers after review)
-  throw `NeedsRunnerError` with the exact command to run instead. The runner (P1) replaces them.
+- `runs.*` queues splits for the user's runner (`jobs` table); the runner protocol lives in
+  `src/server/jobs.ts` and `/api/runner/*`, and a finished run goes through the same ingest.
+- Publishing and merging layers after review need the user's machine: they throw
+  `NeedsRunnerError` with the exact command to run instead.
 
 ## Sample (`./sample`)
 

@@ -25,6 +25,7 @@ export const routes = {
   activity: (id: string) => `/app/stacks/${id}/activity`,
   publish: (id: string) => `/app/stacks/${id}/publish`,
   published: (id: string) => `/app/stacks/${id}/published`,
+  run: (id: string) => `/app/runs/${id}`,
   repositories: "/app/repositories",
   repository: (id: string) => `/app/repositories/${id}`,
   settings: "/app/settings",

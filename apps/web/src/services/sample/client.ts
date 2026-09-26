@@ -291,6 +291,25 @@ export const sampleClient: CleaveClient = {
     },
   },
 
+  // The sample workspace replays recorded runs through stacks.start; it has no runners.
+  runs: {
+    async start() {
+      throw new Error("Runs on your own machine need a live workspace. Sign in with GitHub and start `cleave runner`.");
+    },
+    async get() {
+      return null;
+    },
+    async recent() {
+      return [];
+    },
+    async cancel() {
+      throw new Error("The sample workspace has no runs to cancel.");
+    },
+    async runners() {
+      return [];
+    },
+  },
+
   activity: {
     forStack: cache(async (stackId: string): Promise<ActivityEvent[]> => {
       const { built } = await loadWorkspace();

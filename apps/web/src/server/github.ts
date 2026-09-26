@@ -49,6 +49,7 @@ export interface GhRepo {
 
 export interface GhPull {
   number: number;
+  state?: string;
   title: string;
   html_url: string;
   draft?: boolean;
@@ -76,6 +77,10 @@ export const listOpenPulls = cache(async (token: string, fullName: string, limit
   const pulls = await gh<GhPull[]>(token, `/repos/${fullName}/pulls?state=open&sort=updated&direction=desc&per_page=${limit}`);
   return Promise.all(pulls.map((p) => gh<GhPull>(token, `/repos/${fullName}/pulls/${p.number}`).catch(() => p)));
 });
+
+export const getPull = cache(async (token: string, fullName: string, number: number): Promise<GhPull> =>
+  gh<GhPull>(token, `/repos/${fullName}/pulls/${number}`),
+);
 
 export const countOpenPulls = cache(async (token: string, fullName: string): Promise<number> => {
   const pulls = await gh<unknown[]>(token, `/repos/${fullName}/pulls?state=open&per_page=100`);

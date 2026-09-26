@@ -66,12 +66,17 @@ Without step 2–4 the deployment serves the sample workspace only, and says so.
 | `/app/stacks/[id]/layers`, `…/layers/[layer]` | Layers, one layer's hunks and edges |
 | `/app/stacks/[id]/verification`, `…/activity` | Checks and rounds, run timeline |
 | `/app/stacks/[id]/publish`, `…/published` | Publish plan, published pull requests |
+| `/app/runs/[runId]` | A split started from New split: status, runner, live events (refreshes every 2 s), cancel |
 | `/app/repositories`, `/app/repositories/[id]` | Repositories (connect one from your GitHub list), one repository with its open pull requests |
 | `/app/settings` (+ `/github`, `/runners`, `/appearance`) | Profile, GitHub, runner tokens, theme |
 
 | API | Auth | Purpose |
 | --- | --- | --- |
 | `POST /api/ingest/bundle` | `Bearer clv_…` runner token | Store a run pushed by `cleave push` (gzip JSON, validated against `/schemas/bundle.schema.json`). Runs with `eval` are public and feed `/results` |
+| `POST /api/runner/claim` | runner token | Long poll (≤ 25 s) for a queued run: a Job (`/schemas/job.schema.json`) or 204 |
+| `POST /api/runner/heartbeat` | runner token | Runner and Bob versions; 409 when its job is no longer running |
+| `POST /api/runner/runs/[runId]/events` | runner token | NDJSON of events while the run works (≤ 500 per request) |
+| `POST /api/runner/runs/[runId]/complete` | runner token | `{status: "succeeded", bundle}` (stored like a push) or `{status: "failed", error}` |
 | `GET/POST /api/auth/[...nextauth]` | — | GitHub sign-in (Auth.js) |
 
 ## How it's built
@@ -88,8 +93,9 @@ drizzle/            SQL migrations
 test/fixtures/      sample-bundle.json: a sample stack exported as a push bundle
 ```
 
-Ten tables (`src/server/db/schema.ts`): users, repositories, stacks, runs, atoms,
-plan_versions, layers, checks, events, runners. Runner tokens are stored as SHA-256 hashes
+Twelve tables (`src/server/db/schema.ts`): users, repositories, stacks, runs, atoms,
+plan_versions, layers, checks, events, runners, and jobs + job_events for runs started
+from the browser. Runner tokens are stored as SHA-256 hashes
 and shown once.
 
 ## Dependencies
@@ -102,9 +108,11 @@ Dev: `tailwindcss` 4, `typescript` 5, `eslint` 9 + `eslint-config-next`, `drizzl
 
 ## Known gaps
 
-- Starting splits, publishing and merging layers from the browser need the runner (P1).
-  Until then the live pages show the exact commands to run instead.
-- Activity is read when the page loads; live updates arrive with the runner.
+- The runner's engine side (`cleave runner`, task13) isn't built yet. Until it is, New split
+  can queue a run but nothing claims it; the run page says it's waiting for a runner, and
+  the Bob IDE steps beside it work today.
+- Publishing and merging layers after review still run on your machine (`cleave publish`,
+  Bob IDE); the pages show the commands.
 - Open pull requests and CI state need a GitHub sign-in. The development login has no
   GitHub token, and the pages say so instead of showing an empty list.
 - Inside `/app`, not-found pages return HTTP 200 (streaming); `/proof/[id]` returns a real 404.

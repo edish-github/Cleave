@@ -1,5 +1,6 @@
 /**
- * Postgres schema: the ten tables from the routes doc, section 9.
+ * Postgres schema: the ten tables from the routes doc, section 9, plus jobs and
+ * job_events for runs started from the browser and executed by a runner.
  *
  * A stack is one base -> head split of a pull request. A run is one execution of it
  * (a Cleave run or a baseline), so re-runs and baselines sit side by side. The values
@@ -253,6 +254,59 @@ export const events = pgTable(
   (t) => [index("events_run_ts").on(t.runId, t.ts)],
 );
 
+export const jobStatus = pgEnum("job_status", ["queued", "running", "succeeded", "failed", "cancelled"]);
+
+/**
+ * A split started from the browser. A runner claims it, runs it on its own machine and
+ * completes it with a bundle, which becomes a run of a stack through the normal ingest.
+ * The id doubles as the engine run id. Shape sent to runners: /schemas/job.schema.json.
+ */
+export const jobs = pgTable(
+  "jobs",
+  {
+    id: text("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    repositoryId: uuid("repository_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    status: jobStatus("status").notNull().default("queued"),
+    prNumber: integer("pr_number").notNull(),
+    prUrl: text("pr_url"),
+    prAuthor: text("pr_author"),
+    title: text("title").notNull(),
+    headBranch: text("head_branch").notNull(),
+    baseBranch: text("base_branch").notNull(),
+    config: jsonb("config").$type<C.JobConfig>().notNull(),
+    runnerId: uuid("runner_id").references(() => runners.id, { onDelete: "set null" }),
+    stackId: text("stack_id").references(() => stacks.id, { onDelete: "set null" }),
+    error: text("error"),
+    createdAt: createdAt(),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [index("jobs_queue").on(t.userId, t.status, t.createdAt)],
+);
+
+/** Events a runner streams while a job runs. The finished bundle carries the full log. */
+export const jobEvents = pgTable(
+  "job_events",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    jobId: text("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    ts: timestamp("ts", { withTimezone: true }).notNull(),
+    source: text("source").$type<C.Event["source"]>().notNull(),
+    type: text("type").notNull(),
+    tool: text("tool"),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+  },
+  (t) => [index("job_events_job").on(t.jobId, t.id)],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type RepositoryRow = typeof repositories.$inferSelect;
 export type StackRow = typeof stacks.$inferSelect;
@@ -262,3 +316,5 @@ export type LayerRow = typeof layers.$inferSelect;
 export type CheckRow = typeof checks.$inferSelect;
 export type EventRow = typeof events.$inferSelect;
 export type RunnerRow = typeof runners.$inferSelect;
+export type JobRow = typeof jobs.$inferSelect;
+export type JobEventRow = typeof jobEvents.$inferSelect;

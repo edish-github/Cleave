@@ -6,6 +6,9 @@ import type {
   PullRequest,
   Repository,
   RepositorySummary,
+  RunJob,
+  RunJobSummary,
+  RunnerInfo,
   SearchItem,
   Session,
   Stack,
@@ -64,6 +67,17 @@ export interface CleaveClient {
     setVisibility(stackId: string, visibility: Visibility): Promise<void>;
     /** CI state of each published layer's pull request, keyed by layer index. */
     ciStatus(stackId: string): Promise<Record<number, CiState>>;
+  };
+
+  /** Splits started from the browser and executed by the user's runner (`cleave runner`). */
+  runs: {
+    /** Queue a split of an open pull request. Returns the run id the runner will use. */
+    start(input: { repoId: string; prNumber: number }): Promise<{ runId: string }>;
+    get(runId: string): Promise<RunJob | null>;
+    recent(limit: number): Promise<RunJobSummary[]>;
+    cancel(runId: string): Promise<void>;
+    /** The user's runner tokens, with whether each was seen in the last two minutes. */
+    runners(): Promise<RunnerInfo[]>;
   };
 
   activity: {
