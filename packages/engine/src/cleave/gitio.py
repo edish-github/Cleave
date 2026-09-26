@@ -9,6 +9,9 @@ Spec: tests/test_atomize_build.py. Starting point: research/kill-tests/cleave_pr
 
 from __future__ import annotations
 
+import os
+import subprocess
+import tempfile
 from pathlib import Path
 
 
@@ -22,27 +25,40 @@ class GitError(RuntimeError):
 
 def git(repo: Path, *args: str, input: bytes | None = None, env: dict[str, str] | None = None) -> str:
     """Run git in ``repo`` and return stdout (text). Raise GitError on a non-zero exit."""
-    raise NotImplementedError
+    run_env = os.environ.copy()
+    if env:
+        run_env.update(env)
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=str(repo),
+        input=input,
+        env=run_env,
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        raise GitError(list(args), proc.stderr.decode("utf-8", errors="replace"))
+    return proc.stdout.decode("utf-8", errors="replace")
 
 
 def rev_parse(repo: Path, ref: str) -> str:
     """Full 40-char sha for a ref or sha."""
-    raise NotImplementedError
+    return git(repo, "rev-parse", ref).strip()
 
 
 def tree_of(repo: Path, commit: str) -> str:
     """Tree sha of a commit (``<commit>^{tree}``)."""
-    raise NotImplementedError
+    return git(repo, "rev-parse", f"{commit}^{{tree}}").strip()
 
 
 def is_clean(repo: Path) -> bool:
     """True when the working tree has no uncommitted changes. atomize refuses a dirty tree."""
-    raise NotImplementedError
+    out = git(repo, "status", "--porcelain", "--untracked-files=all")
+    return len(out.strip()) == 0
 
 
 def diff(repo: Path, base: str, head: str) -> str:
     """``git diff --no-color --no-ext-diff -U0 --find-renames --binary base head``."""
-    raise NotImplementedError
+    return git(repo, "diff", "--no-color", "--no-ext-diff", "-U0", "--find-renames", "--binary", base, head)
 
 
 def build_tree(repo: Path, base: str, patch: str) -> str:
@@ -50,24 +66,44 @@ def build_tree(repo: Path, base: str, patch: str) -> str:
 
     Raise GitError when the patch does not apply. Never touches the working tree.
     """
-    raise NotImplementedError
+    with tempfile.NamedTemporaryFile(delete=False) as f:
+        temp_idx = f.name
+    try:
+        env = {"GIT_INDEX_FILE": temp_idx}
+        git(repo, "read-tree", base, env=env)
+        if patch.strip():
+            git(
+                repo,
+                "apply",
+                "--cached",
+                "--unidiff-zero",
+                "--whitespace=nowarn",
+                input=patch.encode("utf-8"),
+                env=env,
+            )
+        return git(repo, "write-tree", env=env).strip()
+    finally:
+        if os.path.exists(temp_idx):
+            os.remove(temp_idx)
 
 
 def commit_tree(repo: Path, tree: str, parent: str, message: str) -> str:
     """Create a commit object for ``tree`` with one parent; return its sha."""
-    raise NotImplementedError
+    return git(repo, "commit-tree", tree, "-p", parent, "-m", message).strip()
 
 
 def update_ref(repo: Path, ref: str, sha: str) -> None:
     """Point ``ref`` (e.g. ``refs/heads/cleave/<slug>/1-models``) at ``sha``."""
-    raise NotImplementedError
+    git(repo, "update-ref", ref, sha)
 
 
 def add_worktree(repo: Path, path: Path, commit: str) -> None:
     """Detached ``git worktree add`` of ``commit`` at ``path``."""
-    raise NotImplementedError
+    git(repo, "worktree", "add", "--detach", str(path), commit)
 
 
 def remove_worktree(repo: Path, path: Path) -> None:
     """``git worktree remove --force`` and prune."""
-    raise NotImplementedError
+    git(repo, "worktree", "remove", "--force", str(path))
+    git(repo, "worktree", "prune")
+

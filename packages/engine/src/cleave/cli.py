@@ -160,6 +160,36 @@ def cmd_mcp(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_build(args: argparse.Namespace) -> int:
+    from .build import build_stack
+
+    repo = Path(args.repo).resolve()
+    run = _run(repo, args.run)
+    atoms = AtomsFile.model_validate_json(run.atoms.read_text())
+    plans = sorted(run.path.glob("plan.v*.json"))
+    if not plans:
+        raise SystemExit("No plan found. Propose one first.")
+    plan = Plan.model_validate_json(plans[-1].read_text())
+    slug = args.slug or run.run_id
+    layers = build_stack(repo, atoms, plan, slug)
+    print(
+        json.dumps(
+            [
+                {
+                    "index": l.index,
+                    "name": l.name,
+                    "branch": l.branch,
+                    "commit": l.commit,
+                    "tree": l.tree,
+                }
+                for l in layers
+            ],
+            indent=2,
+        )
+    )
+    return 0
+
+
 def _not_yet(name: str):
     def run(_: argparse.Namespace) -> int:
         raise SystemExit(f"`cleave {name}` is not implemented yet.")
@@ -194,7 +224,12 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--run")
     s.set_defaults(func=cmd_check)
 
-    for name, help_ in (("build", "Build cleave/* branches"), ("verify", "Verify every layer"), ("publish", "Open stacked pull requests"), ("runner", "Run jobs from the web app"), ("eval", "Constructed diffs and baselines")):
+    s = sub.add_parser("build", help="Build cleave/* branches")
+    s.add_argument("--run")
+    s.add_argument("--slug")
+    s.set_defaults(func=cmd_build)
+
+    for name, help_ in (("verify", "Verify every layer"), ("publish", "Open stacked pull requests"), ("runner", "Run jobs from the web app"), ("eval", "Constructed diffs and baselines")):
         s = sub.add_parser(name, help=help_)
         s.add_argument("--run")
         s.set_defaults(func=_not_yet(name))
