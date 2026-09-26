@@ -26,6 +26,7 @@ export function StacksTable({ stacks }: { stacks: StackListItem[] }) {
     { value: "review" as const, label: "Needs review", count: count("review") },
     { value: "verified" as const, label: "Verified", count: count("verified") },
     { value: "published" as const, label: "Published", count: count("published") },
+    ...(count("failed") ? [{ value: "failed" as const, label: "Failed", count: count("failed") }] : []),
     ...(count("analyzing") ? [{ value: "analyzing" as const, label: "Analyzing", count: count("analyzing") }] : []),
   ];
 

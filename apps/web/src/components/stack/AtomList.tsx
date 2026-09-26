@@ -34,6 +34,15 @@ function DiffView({ patch, truncated, additions }: { patch: string; truncated: b
   );
 }
 
+const kindBadge: Record<Atom["kind"], string> = {
+  hunk: "",
+  "new-file": "new file",
+  "deleted-file": "deleted",
+  rename: "renamed",
+  binary: "binary",
+  mode: "mode change",
+};
+
 export function AtomList({ atoms }: { atoms: Atom[] }) {
   const [open, setOpen] = useState<Set<string>>(new Set());
 
@@ -60,8 +69,10 @@ export function AtomList({ atoms }: { atoms: Atom[] }) {
               <span className="flex flex-wrap items-baseline gap-x-2">
                 <span className="font-mono text-[13px] text-ink">{name}</span>
                 {dir ? <span className="truncate font-mono text-[12px] text-ink-3">{dir}</span> : null}
-                {atom.kind === "new-file" ? (
-                  <span className="rounded-full bg-accent-soft px-1.5 text-[11px] font-medium text-accent-ink">new file</span>
+                {atom.kind !== "hunk" ? (
+                  <span className="rounded-full bg-accent-soft px-1.5 text-[11px] font-medium text-accent-ink">
+                    {kindBadge[atom.kind]}
+                  </span>
                 ) : null}
               </span>
               <span className="mt-0.5 block text-[14px] text-ink-2">{atom.summary}</span>

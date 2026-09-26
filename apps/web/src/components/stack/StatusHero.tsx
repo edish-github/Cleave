@@ -7,6 +7,7 @@ const labels: Record<StackStatus, string> = {
   analyzing: "Analyzing",
   verified: "Verified",
   review: "Review required",
+  failed: "Failed",
   published: "Published",
 };
 
@@ -29,6 +30,7 @@ export function StatusHero({
         "relative overflow-hidden rounded-2xl border px-6 py-6 sm:px-7",
         status === "verified" && "border-ok-line bg-gradient-to-br from-ok-soft/70 via-surface to-surface",
         status === "review" && "border-warn-line bg-gradient-to-br from-warn-soft/70 via-surface to-surface",
+        status === "failed" && "border-bad/25 bg-gradient-to-br from-bad-soft/70 via-surface to-surface",
         status === "published" && "border-line bg-gradient-to-br from-subtle via-surface to-surface",
         status === "analyzing" && "border-accent-line bg-gradient-to-br from-accent-soft/70 via-surface to-surface",
         className,
@@ -43,6 +45,7 @@ export function StatusHero({
                 "text-[12px] font-semibold tracking-[0.08em] uppercase",
                 status === "verified" && "text-ok",
                 status === "review" && "text-warn",
+                status === "failed" && "text-bad",
                 status === "published" && "text-ink-2",
                 status === "analyzing" && "text-accent-ink",
               )}

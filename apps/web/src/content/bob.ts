@@ -82,8 +82,9 @@ export const guardRules = [
 export const commands = {
   install: "uv tool install ./packages/engine",
   init: "cleave init",
-  ideRequest: "Cleave feature/cancellations onto main",
-  headless: 'bob run --mode cleave --format stream-json --max-cost 3 "Cleave feature/cancellations onto main"',
-  push: "cleave push",
+  ideRequest: "Cleave feat/loyalty-and-seat-upgrades onto main",
+  headless: 'bob run --mode cleave --format stream-json --max-cost 3 "Cleave feat/loyalty-and-seat-upgrades onto main"',
+  push: 'cleave push --title "<pull request title>" --pr <number> --head-branch <branch> --base-branch main',
+  publish: "cleave publish",
   runner: "cleave runner --token $CLEAVE_RUNNER_TOKEN",
 };

@@ -4,6 +4,7 @@ import type { StackStatus } from "@/lib/types";
 const barTone: Record<StackStatus, string> = {
   verified: "bg-ok",
   review: "bg-warn",
+  failed: "bg-bad",
   analyzing: "bg-accent",
   published: "bg-ink-2",
 };

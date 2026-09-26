@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
-export type Tone = "neutral" | "ok" | "attention" | "accent" | "ink";
+export type Tone = "neutral" | "ok" | "attention" | "bad" | "accent" | "ink";
 
 const tones: Record<Tone, string> = {
   neutral: "bg-subtle text-ink-2 border-line",
   ok: "bg-ok-soft text-ok border-ok-line",
   attention: "bg-warn-soft text-warn border-warn-line",
+  bad: "bg-bad-soft text-bad border-bad/25",
   accent: "bg-accent-soft text-accent-ink border-accent-line",
   ink: "bg-ink text-canvas border-transparent",
 };
@@ -15,6 +16,7 @@ const dots: Record<Tone, string> = {
   neutral: "bg-ink-3",
   ok: "bg-ok",
   attention: "bg-warn",
+  bad: "bg-bad",
   accent: "bg-accent",
   ink: "bg-canvas",
 };
