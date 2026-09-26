@@ -40,17 +40,18 @@ export const bobFiles = {
   }
 }`,
   },
-  // Hook schema to confirm against real Bob payloads (routes doc, open check C1).
+  // No "matcher": in Bob it's a regex on the tool name, and the guard must see every tool.
+  // cleave init appends these entries to a repository's existing hooks instead of replacing them.
   hooks: {
     path: ".bob/settings.json",
     language: "json",
     code: `{
   "hooks": {
     "PreToolUse": [
-      { "matcher": "*", "hooks": [{ "type": "command", "command": "python3 .bob/hooks/guard.py" }] }
+      { "hooks": [{ "type": "command", "command": "python3 .bob/hooks/guard.py", "timeout": 10 }] }
     ],
     "PostToolUse": [
-      { "matcher": "*", "hooks": [{ "type": "command", "command": "python3 .bob/hooks/audit.py" }] }
+      { "hooks": [{ "type": "command", "command": "python3 .bob/hooks/audit.py", "timeout": 10 }] }
     ]
   }
 }`,
@@ -74,9 +75,9 @@ export const mcpTools: { name: string; does: string; writes: string }[] = [
 export const guardRules = [
   "Read tools are allowed.",
   "Read-only explore subagents are allowed.",
-  "Todo updates are allowed.",
+  "Todo updates, questions to you and finishing the task are allowed.",
   "Calls to the cleave MCP server are allowed.",
-  "Everything else is blocked with exit code 2 while a run is active.",
+  "Everything else is blocked with exit code 2 while a run is active: file writes, commands, mode switches and other MCP servers.",
 ];
 
 export const commands = {

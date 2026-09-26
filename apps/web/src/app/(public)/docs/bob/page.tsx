@@ -56,9 +56,9 @@ export default function BobDocsPage() {
         <div className="min-w-0 max-w-[760px] space-y-20">
           <Step id="install" n={1} title="Install the engine and the mode">
             <p>
-              The engine is a Python package with a <code>cleave</code> command. <code>cleave init</code> copies the mode, the
-              MCP server entry, the hooks and the mode rules into your repository&apos;s <code>.bob/</code> folder, so the
-              whole team shares the same setup.
+              The engine is a Python package with a <code>cleave</code> command. <code>cleave init</code> adds the mode, the
+              MCP server entry, the hooks and the mode rules to your repository&apos;s <code>.bob/</code> folder. Modes,
+              MCP servers and hooks you already have stay as they are, and running it again changes nothing.
             </p>
             <CodeBlock title="From the Cleave repository" code={commands.install} />
             <CodeBlock title="In the repository you want to split" code={commands.init} />
