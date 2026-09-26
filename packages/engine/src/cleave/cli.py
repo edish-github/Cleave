@@ -44,28 +44,116 @@ def _run(repo: Path, run_id: str | None) -> RunDir:
 
 
 def cmd_init(args: argparse.Namespace) -> int:
+    from typing import Any
+
+    from .mcp_server import TOOL_NAMES
+
     repo = Path(args.repo).resolve()
     source = resources.files("cleave") / "bob_config"
     target = repo / ".bob"
-    for item in source.iterdir():
-        if item.name == "README.md":
-            continue
-        dest = target / item.name
-        if item.is_dir():
-            shutil.copytree(item, dest, dirs_exist_ok=True)  # type: ignore[arg-type]
-        else:
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(item.read_bytes())
+    target.mkdir(parents=True, exist_ok=True)
+
+    # 1. Copy hooks/ and rules-cleave/
+    for folder in ("hooks", "rules-cleave"):
+        src_dir = source / folder
+        dst_dir = target / folder
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        for item in src_dir.iterdir():
+            if item.is_file():
+                (dst_dir / item.name).write_bytes(item.read_bytes())
+
+    # 2. Merge mcp.json
+    mcp_file = target / "mcp.json"
+    cleave_cmd = shutil.which("cleave") or "cleave"
+    cleave_entry = {
+        "command": cleave_cmd,
+        "args": ["mcp", "--repo", str(repo.resolve())],
+        "alwaysAllow": sorted(TOOL_NAMES),
+    }
+    mcp_data: dict[str, Any] = {}
+    if mcp_file.exists():
+        try:
+            mcp_data = json.loads(mcp_file.read_text())
+        except Exception:
+            mcp_data = {}
+    if not isinstance(mcp_data, dict):
+        mcp_data = {}
+    if "mcpServers" not in mcp_data or not isinstance(mcp_data["mcpServers"], dict):
+        mcp_data["mcpServers"] = {}
+    mcp_data["mcpServers"]["cleave"] = cleave_entry
+    mcp_file.write_text(json.dumps(mcp_data, indent=2) + "\n")
+
+    # 3. Merge settings.json
+    settings_file = target / "settings.json"
+    guard_entry = {"hooks": [{"type": "command", "command": "python3 .bob/hooks/guard.py", "timeout": 10}]}
+    audit_entry = {"hooks": [{"type": "command", "command": "python3 .bob/hooks/audit.py", "timeout": 10}]}
+    settings_data: dict[str, Any] = {}
+    if settings_file.exists():
+        try:
+            settings_data = json.loads(settings_file.read_text())
+        except Exception:
+            settings_data = {}
+    if not isinstance(settings_data, dict):
+        settings_data = {}
+    if "hooks" not in settings_data or not isinstance(settings_data["hooks"], dict):
+        settings_data["hooks"] = {}
+    hooks_dict = settings_data["hooks"]
+    if "PreToolUse" not in hooks_dict or not isinstance(hooks_dict["PreToolUse"], list):
+        hooks_dict["PreToolUse"] = []
+    if "PostToolUse" not in hooks_dict or not isinstance(hooks_dict["PostToolUse"], list):
+        hooks_dict["PostToolUse"] = []
+
+    has_guard = any(
+        any("hooks/guard.py" in h.get("command", "") for h in entry.get("hooks", []))
+        for entry in hooks_dict["PreToolUse"]
+        if isinstance(entry, dict)
+    )
+    if not has_guard:
+        hooks_dict["PreToolUse"].append(guard_entry)
+
+    has_audit = any(
+        any("hooks/audit.py" in h.get("command", "") for h in entry.get("hooks", []))
+        for entry in hooks_dict["PostToolUse"]
+        if isinstance(entry, dict)
+    )
+    if not has_audit:
+        hooks_dict["PostToolUse"].append(audit_entry)
+    settings_file.write_text(json.dumps(settings_data, indent=2) + "\n")
+
+    # 4. Merge custom_modes.yaml
+    modes_file = target / "custom_modes.yaml"
+    mode_text = (source / "custom_modes.yaml").read_text()
+    if not modes_file.exists():
+        modes_file.write_text(mode_text)
+    else:
+        existing_modes = modes_file.read_text()
+        if "slug: cleave" not in existing_modes:
+            has_active_custom_modes = any(
+                line.strip().startswith("customModes:") and not line.lstrip().startswith("#")
+                for line in existing_modes.splitlines()
+            )
+            if has_active_custom_modes:
+                cleave_lines = [l for l in mode_text.splitlines() if not l.startswith("customModes:")]
+                cleave_block = "\n".join(cleave_lines).strip()
+                new_text = existing_modes.rstrip() + "\n  " + cleave_block.lstrip() + "\n"
+            else:
+                new_text = existing_modes.rstrip() + "\n\n" + mode_text.lstrip()
+            modes_file.write_text(new_text)
+
+    # 5. Config
     config = load_config(repo)
     updates = {k: v for k, v in {"check_command": args.check, "setup_command": args.setup, "working_directory": args.workdir}.items() if v}
     config = RunConfig(**{**config.model_dump(), **updates})
     (repo / CONFIG_PATH).parent.mkdir(parents=True, exist_ok=True)
     (repo / CONFIG_PATH).write_text(render_config(config))
-    gitignore = repo / ".gitignore"
-    existing = gitignore.read_text().splitlines() if gitignore.exists() else []
-    missing = [line for line in GITIGNORE_LINES if line not in existing]
-    if missing:
-        gitignore.write_text("\n".join([*existing, *missing]) + "\n")
+
+    # 6. .cleave/.gitignore (leaves root .gitignore alone)
+    cleave_dir = repo / ".cleave"
+    cleave_dir.mkdir(parents=True, exist_ok=True)
+    cleave_gitignore = cleave_dir / ".gitignore"
+    if not cleave_gitignore.exists():
+        cleave_gitignore.write_text("runs/\nactive\n")
+
     print(f"Installed the Cleave mode in {target} and wrote {CONFIG_PATH}.")
     return 0
 
@@ -153,10 +241,11 @@ def cmd_push(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_mcp(_: argparse.Namespace) -> int:
+def cmd_mcp(args: argparse.Namespace) -> int:
     from .mcp_server import main as serve
 
-    serve()
+    repo = Path(args.repo).resolve() if getattr(args, "repo", None) else None
+    serve(repo)
     return 0
 
 
@@ -266,6 +355,7 @@ def parser() -> argparse.ArgumentParser:
         s.set_defaults(func=_not_yet(name))
 
     s = sub.add_parser("mcp", help="Serve the Cleave tools to Bob over stdio")
+    s.add_argument("--repo", help="Target repository root (default: current directory)")
     s.set_defaults(func=cmd_mcp)
 
     s = sub.add_parser("push", help="Send a finished run to the web app")
