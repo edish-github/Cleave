@@ -6,15 +6,16 @@ import { LayerStrip } from "@/components/stack/LayerStrip";
 import { HalfCircle } from "@/components/stack/StackStatus";
 import { VerificationChecks } from "@/components/stack/VerificationChecks";
 import { cn } from "@/lib/cn";
-import { formatDate, formatDuration, formatNumber, pad2, plural, shortHash } from "@/lib/format";
-import { api } from "@/services";
+import { coinsOrDash, countOrDash, formatDate, formatNumber, pad2, plural, secondsOrDash, shortHash } from "@/lib/format";
+import { getPublicStack } from "@/services";
 
 type Params = Promise<{ stackId: string }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { stackId } = await params;
-  const stack = await api.stacks.getPublic(stackId);
-  if (!stack) return { title: "Proof not found", robots: { index: false } };
+  const found = await getPublicStack(stackId);
+  if (!found) return { title: "Proof not found", robots: { index: false } };
+  const { stack } = found;
   const passing = stack.verification.checks.filter((c) => c.state === "pass").length;
   const description = `${stack.repoFullName} #${stack.prNumber} split into ${stack.layers.length} layers. ${passing} of ${stack.verification.checks.length} checks pass.`;
   return {
@@ -26,8 +27,9 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 
 export default async function ProofPage({ params }: { params: Params }) {
   const { stackId } = await params;
-  const stack = await api.stacks.getPublic(stackId);
-  if (!stack) notFound();
+  const found = await getPublicStack(stackId);
+  if (!found) notFound();
+  const { stack, sample } = found;
 
   const { verification, layers, bob } = stack;
   const passing = verification.checks.filter((c) => c.state === "pass").length;
@@ -39,7 +41,7 @@ export default async function ProofPage({ params }: { params: Params }) {
 
   return (
     <main id="main" className="mx-auto max-w-[920px] px-5 pt-10 pb-24 sm:px-8 sm:pt-16">
-      {api.source === "sample" ? (
+      {sample ? (
         <p className="mb-10 flex gap-3 rounded-2xl border border-accent-line bg-accent-soft/60 px-4 py-3 text-[13px] leading-relaxed text-ink-2">
           <Info className="mt-0.5 size-4 shrink-0 text-accent-ink" />
           <span>This proof comes from Cleave&apos;s sample workspace. The layout and checks are the ones every real stack gets.</span>
@@ -139,13 +141,13 @@ export default async function ProofPage({ params }: { params: Params }) {
         </p>
         <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-4">
           <Tile label="Ran in" value={bob.surface} />
-          <Tile label="Read-only subagents" value={String(bob.subagents)} />
-          <Tile label="Cleave tool calls" value={String(bob.mcpCalls)} />
+          <Tile label="Read-only subagents" value={countOrDash(bob.subagents)} />
+          <Tile label="Cleave tool calls" value={countOrDash(bob.mcpCalls)} />
           <Tile label="Atoms moved in repair" value={String(verification.repairs.length)} />
           <Tile label="Tool calls allowed" value={String(bob.hookAllowed)} />
           <Tile label="Source edits blocked" value={String(bob.hookBlocked)} />
-          <Tile label="Bobcoins" value={bob.bobcoins.toFixed(2)} />
-          <Tile label="Duration" value={formatDuration(bob.durationSec * 1000)} />
+          <Tile label="Bobcoins" value={coinsOrDash(bob.bobcoins)} />
+          <Tile label="Duration" value={secondsOrDash(bob.durationSec)} />
         </dl>
       </section>
 
