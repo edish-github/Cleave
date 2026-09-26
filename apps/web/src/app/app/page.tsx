@@ -35,6 +35,7 @@ const attentionCopy = {
   analyzing: { action: "View progress", detail: "Analysis in progress" },
   review: { action: "Review", detail: "One layer fails on its own" },
   verified: { action: "Publish", detail: "Every layer passes" },
+  failed: { action: "View", detail: "The run stopped with an error" },
 } as const;
 
 export default async function OverviewPage() {
@@ -44,7 +45,7 @@ export default async function OverviewPage() {
     api.activity.recent(5),
     api.repositories.list(),
   ]);
-  const pullRequests = (await Promise.all(repos.map((r) => api.repositories.pullRequests(r.id)))).flat();
+  const pullRequests = (await Promise.all(repos.map((r) => api.repositories.pullRequests(r.id).catch(() => [])))).flat();
   const now = requestNow();
 
   const firstName = user.name.split(" ")[0] ?? user.name;

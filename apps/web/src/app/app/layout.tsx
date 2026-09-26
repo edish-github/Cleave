@@ -7,12 +7,12 @@ import { api } from "@/services";
 export default async function AppLayout({ children }: { children: ReactNode }) {
   // proxy.ts already redirects signed-out visitors; this guards direct renders.
   const session = await api.session.get();
-  if (!session) redirect(routes.login);
+  if (!session) redirect(`${routes.login}?error=session`);
 
-  const [user, searchItems] = await Promise.all([api.user.get(), api.search.index()]);
+  const [user, searchItems, sample] = await Promise.all([api.user.get(), api.search.index(), api.isSample()]);
 
   return (
-    <AppFrame user={user} searchItems={searchItems} sample={api.source === "sample"}>
+    <AppFrame user={user} searchItems={searchItems} sample={sample}>
       {children}
     </AppFrame>
   );
