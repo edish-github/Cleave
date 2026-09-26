@@ -190,6 +190,33 @@ def cmd_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_verify(args: argparse.Namespace) -> int:
+    from .events import EventLog
+    from .verify import verify
+
+    repo = Path(args.repo).resolve()
+    run = _run(repo, args.run)
+    config = load_config(repo)
+    atoms = AtomsFile.model_validate_json(run.atoms.read_text())
+    plans = run.plan_versions()
+    if not plans:
+        raise SystemExit("No plan found. Propose one first.")
+    plan = Plan.model_validate_json(run.plan(plans[-1]).read_text())
+
+    existing_rounds = set()
+    for log_path in run.checks.glob("r*-l*.log"):
+        try:
+            r = int(log_path.stem.split("-")[0][1:])
+            existing_rounds.add(r)
+        except Exception:
+            pass
+    round_ = (max(existing_rounds) + 1) if existing_rounds else 1
+    log = EventLog(run.events, run.run_id)
+    res = verify(repo, atoms, plan, config, run, round_, log)
+    print(json.dumps(dump(res), indent=2))
+    return 0 if all(r.status == "pass" for r in res.results) else 1
+
+
 def _not_yet(name: str):
     def run(_: argparse.Namespace) -> int:
         raise SystemExit(f"`cleave {name}` is not implemented yet.")
@@ -229,7 +256,11 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--slug")
     s.set_defaults(func=cmd_build)
 
-    for name, help_ in (("verify", "Verify every layer"), ("publish", "Open stacked pull requests"), ("runner", "Run jobs from the web app"), ("eval", "Constructed diffs and baselines")):
+    s = sub.add_parser("verify", help="Verify every layer")
+    s.add_argument("--run")
+    s.set_defaults(func=cmd_verify)
+
+    for name, help_ in (("publish", "Open stacked pull requests"), ("runner", "Run jobs from the web app"), ("eval", "Constructed diffs and baselines")):
         s = sub.add_parser(name, help=help_)
         s.add_argument("--run")
         s.set_defaults(func=_not_yet(name))
