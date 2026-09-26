@@ -17,7 +17,7 @@ export function FinalCta() {
           Analyze it, check the proof, and publish a stack your reviewers can actually read.
         </p>
         <div className="mt-8 flex justify-center gap-3">
-          <ButtonLink href={routes.signup} size="lg">
+          <ButtonLink href={routes.login} size="lg">
             Get started
           </ButtonLink>
           <ButtonLink href={routes.bobDocs} variant="secondary" size="lg">

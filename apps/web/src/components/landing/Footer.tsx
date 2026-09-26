@@ -17,6 +17,9 @@ export function Footer() {
           <Link href="/#how-it-works" className="hover:text-ink">
             How it works
           </Link>
+          <Link href={routes.results} className="hover:text-ink">
+            Results
+          </Link>
           {site.githubUrl ? (
             <a href={site.githubUrl} className="hover:text-ink" target="_blank" rel="noreferrer">
               GitHub

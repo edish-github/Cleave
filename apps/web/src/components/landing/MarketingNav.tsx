@@ -6,6 +6,7 @@ import { routes, site } from "@/lib/site";
 const links = [
   { href: "/#product", label: "Product" },
   { href: "/#how-it-works", label: "How it works" },
+  { href: routes.results, label: "Results" },
   { href: routes.bobDocs, label: "Docs" },
 ];
 
@@ -32,7 +33,7 @@ export function MarketingNav() {
           <Link href={routes.login} className="rounded-full px-3 py-2 text-[14px] font-medium text-ink hover:bg-subtle">
             Log in
           </Link>
-          <ButtonLink href={routes.signup} size="sm" className="h-9 px-4">
+          <ButtonLink href={routes.login} size="sm" className="h-9 px-4">
             Get started
           </ButtonLink>
         </div>
