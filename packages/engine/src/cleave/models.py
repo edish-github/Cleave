@@ -302,6 +302,61 @@ class Bundle(_Model):
     events: list[Event]
 
 
+# --- job.schema.json (runner protocol) --------------------------------------
+
+
+class JobRepo(_Model):
+    full_name: str = Field(pattern=r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+    clone_url: str
+    default_branch: str
+
+
+class JobPullRequest(_Model):
+    number: int = Field(ge=1)
+    head_branch: str
+    base_branch: str
+    title: str
+    url: str | None = None
+    author: str | None = None
+
+
+class JobConfig(_Model):
+    check_command: str = Field(min_length=1)
+    setup_command: str | None = None
+    working_directory: str
+    max_layer_lines: int = Field(ge=1)
+    max_repair_rounds: int = Field(ge=0)
+    bobcoin_cap: float = Field(gt=0)
+
+
+class Job(_Model):
+    """What ``POST /api/runner/claim`` returns. ``job_id`` is also the engine run id."""
+
+    version: Literal[1] = 1
+    job_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{5,63}$")
+    kind: Literal["split"] = "split"
+    repo: JobRepo
+    pull_request: JobPullRequest
+    config: JobConfig
+    mode: Literal["cleave"] = "cleave"
+    created_at: datetime
+
+
+class RunnerHeartbeat(_Model):
+    runner_version: str | None = None
+    bob_version: str | None = None
+    os: str | None = None
+    job_id: str | None = None
+
+
+class JobCompletion(_Model):
+    """A succeeded job carries its bundle (run_id = job_id, source = runner); a failed one its reason."""
+
+    status: Literal["succeeded", "failed"]
+    bundle: dict[str, Any] | None = None
+    error: str | None = None
+
+
 def dump(model: BaseModel) -> dict[str, Any]:
     """JSON-ready dict using schema field names (``from``, not ``from_``)."""
     return model.model_dump(mode="json", by_alias=True)

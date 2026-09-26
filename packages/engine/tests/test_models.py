@@ -78,6 +78,7 @@ def test_bundle_dump_validates_against_schema(schemas: Path) -> None:
         ("report.schema.json", m.Report),
         ("event.schema.json", m.Event),
         ("bundle.schema.json", m.Bundle),
+        ("job.schema.json", m.Job),
     ],
 )
 def test_model_fields_match_schema_properties(schemas: Path, schema: str, model: type[m.BaseModel]) -> None:
@@ -89,3 +90,23 @@ def test_model_fields_match_schema_properties(schemas: Path, schema: str, model:
 def test_edge_serializes_from_not_from_underscore() -> None:
     edge = m.Edge(**{"from": A1, "to": A2, "kind": "call"})
     assert m.dump(edge)["from"] == A1
+
+
+def test_job_and_completion_validate_against_schema(schemas: Path) -> None:
+    job = m.Job(
+        job_id="20260927-101500-abc123",
+        repo=m.JobRepo(full_name="edish-github/galaxium-travels", clone_url="https://github.com/edish-github/galaxium-travels.git", default_branch="main"),
+        pull_request=m.JobPullRequest(number=1, head_branch="feat/loyalty-and-seat-upgrades", base_branch="main", title="Loyalty tiers"),
+        config=m.JobConfig(check_command="pytest -q", working_directory="booking_system_backend", max_layer_lines=400, max_repair_rounds=3, bobcoin_cap=3),
+        created_at=NOW,
+    )
+    _validate(schemas, "job.schema.json", m.dump(job))
+    registry, loaded = _registry(schemas)
+    for name, instance in (
+        ("heartbeat", m.dump(m.RunnerHeartbeat(runner_version="0.1.0", job_id=job.job_id))),
+        ("completion", m.dump(m.JobCompletion(status="succeeded", bundle=m.dump(_bundle())))),
+        ("completion", m.dump(m.JobCompletion(status="failed", error="bob run exited 1"))),
+    ):
+        schema = {"$ref": f"{loaded['job.schema.json']['$id']}#/$defs/{name}"}
+        errors = list(Draft202012Validator(schema, registry=registry).iter_errors(instance))
+        assert not errors, errors

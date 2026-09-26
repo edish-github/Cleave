@@ -1,6 +1,6 @@
 /**
  * GENERATED from /schemas by `npm run contracts`. Do not edit by hand.
- * These are the shapes the engine writes and POST /api/ingest/bundle accepts.
+ * These are the shapes the engine writes, POST /api/ingest/bundle accepts, and runners exchange.
  */
 
 /**
@@ -435,4 +435,80 @@ export interface Event {
    */
   tool?: string | null;
   payload: {};
+}
+
+/**
+ * What POST /api/runner/claim hands a runner: one split to run on the runner's machine with the user's own git and Bob credentials. The finished run comes back as a bundle whose run_id is job_id.
+ */
+export interface Job {
+  version: 1;
+  /**
+   * Also the engine run id. Events and the completion are posted under /api/runner/runs/<job_id>/.
+   */
+  job_id: string;
+  kind: "split";
+  repo: JobRepo;
+  pull_request: JobPullRequest;
+  config: JobConfig;
+  /**
+   * The Bob mode slug the runner starts with bob run --mode.
+   */
+  mode: "cleave";
+  created_at: string;
+}
+export interface JobRepo {
+  full_name: string;
+  /**
+   * HTTPS clone URL. The runner clones with the machine's own git credentials.
+   */
+  clone_url: string;
+  default_branch: string;
+}
+export interface JobPullRequest {
+  number: number;
+  head_branch: string;
+  base_branch: string;
+  title: string;
+  url?: string | null;
+  author?: string | null;
+}
+/**
+ * The repository's run settings, with the names of .cleave/config.toml.
+ */
+export interface JobConfig {
+  check_command: string;
+  setup_command?: string | null;
+  working_directory: string;
+  max_layer_lines: number;
+  max_repair_rounds: number;
+  /**
+   * Passed to bob run as --max-cost.
+   */
+  bobcoin_cap: number;
+}
+/**
+ * Body of POST /api/runner/heartbeat.
+ *
+ * This interface was referenced by `Job`'s JSON-Schema
+ * via the `definition` "heartbeat".
+ */
+export interface RunnerHeartbeat {
+  runner_version?: string | null;
+  bob_version?: string | null;
+  os?: string | null;
+  /**
+   * The job the runner is working on, if any.
+   */
+  job_id?: string | null;
+}
+/**
+ * Body of POST /api/runner/runs/<job_id>/complete. A succeeded job carries its bundle (bundle.schema.json, run_id = job_id, source = runner); a failed one carries the reason.
+ *
+ * This interface was referenced by `Job`'s JSON-Schema
+ * via the `definition` "completion".
+ */
+export interface JobCompletion {
+  status: "succeeded" | "failed";
+  bundle?: {} | null;
+  error?: string | null;
 }

@@ -446,6 +446,212 @@ export const schemas = {
     }
   }
 },
+  "job.schema.json": {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/edish-github/Cleave/main/schemas/job.schema.json",
+  "title": "Job",
+  "description": "What POST /api/runner/claim hands a runner: one split to run on the runner's machine with the user's own git and Bob credentials. The finished run comes back as a bundle whose run_id is job_id.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "job_id",
+    "kind",
+    "repo",
+    "pull_request",
+    "config",
+    "mode",
+    "created_at"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{5,63}$",
+      "description": "Also the engine run id. Events and the completion are posted under /api/runner/runs/<job_id>/."
+    },
+    "kind": {
+      "const": "split"
+    },
+    "repo": {
+      "title": "JobRepo",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "full_name",
+        "clone_url",
+        "default_branch"
+      ],
+      "properties": {
+        "full_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "clone_url": {
+          "type": "string",
+          "description": "HTTPS clone URL. The runner clones with the machine's own git credentials."
+        },
+        "default_branch": {
+          "type": "string"
+        }
+      }
+    },
+    "pull_request": {
+      "title": "JobPullRequest",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "head_branch",
+        "base_branch",
+        "title"
+      ],
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "head_branch": {
+          "type": "string"
+        },
+        "base_branch": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "author": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "config": {
+      "title": "JobConfig",
+      "description": "The repository's run settings, with the names of .cleave/config.toml.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "check_command",
+        "working_directory",
+        "max_layer_lines",
+        "max_repair_rounds",
+        "bobcoin_cap"
+      ],
+      "properties": {
+        "check_command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "setup_command": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "working_directory": {
+          "type": "string"
+        },
+        "max_layer_lines": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_repair_rounds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bobcoin_cap": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Passed to bob run as --max-cost."
+        }
+      }
+    },
+    "mode": {
+      "const": "cleave",
+      "description": "The Bob mode slug the runner starts with bob run --mode."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "heartbeat": {
+      "title": "RunnerHeartbeat",
+      "description": "Body of POST /api/runner/heartbeat.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runner_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bob_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "os": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "job_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The job the runner is working on, if any."
+        }
+      }
+    },
+    "completion": {
+      "title": "JobCompletion",
+      "description": "Body of POST /api/runner/runs/<job_id>/complete. A succeeded job carries its bundle (bundle.schema.json, run_id = job_id, source = runner); a failed one carries the reason.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "succeeded",
+            "failed"
+          ]
+        },
+        "bundle": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+},
   "plan.schema.json": {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/edish-github/Cleave/main/schemas/plan.schema.json",

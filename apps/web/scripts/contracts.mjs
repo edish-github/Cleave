@@ -16,19 +16,24 @@ const schemasOut = path.resolve(here, "../src/server/schemas.generated.ts");
 
 const banner = `/**
  * GENERATED from /schemas by \`npm run contracts\`. Do not edit by hand.
- * These are the shapes the engine writes and POST /api/ingest/bundle accepts.
+ * These are the shapes the engine writes, POST /api/ingest/bundle accepts, and runners exchange.
  */`;
 
-const ts = await compileFromFile(path.join(schemas, "bundle.schema.json"), {
+const options = {
   cwd: schemas,
-  bannerComment: banner,
   declareExternallyReferenced: true,
   additionalProperties: false,
   unreachableDefinitions: true,
   format: true,
   style: { printWidth: 120, semi: true, singleQuote: false, trailingComma: "all" },
   $refOptions: { resolve: { http: false } },
-});
+};
+
+// The bundle pulls in atom, graph, plan, report and event. The runner's job contract
+// stands alone (it refers to no other schema), so it's compiled on its own and appended.
+const bundleTs = await compileFromFile(path.join(schemas, "bundle.schema.json"), { ...options, bannerComment: banner });
+const jobTs = await compileFromFile(path.join(schemas, "job.schema.json"), { ...options, bannerComment: "" });
+const ts = `${bundleTs}\n${jobTs}`;
 
 // The server validates bundles with the same schemas; inline them so the app never
 // reads files outside apps/web at runtime.
