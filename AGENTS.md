@@ -269,8 +269,9 @@ to 10:45 and cut Phase 7.
   `.cleave/active` exists and exits 2 on anything else; the audit hook logs every call.
 
 **task08 · first ✂ Cleave run on Galaxium → M1** (✂ Cleave mode)
-1. In `~/galaxium-travels`:
-   `cleave init --check "pytest -q" --workdir booking_system_backend --setup "pip install -r requirements.txt"`
+1. In `~/galaxium-travels`: create `booking_system_backend/.venv` with the requirements and
+   `mcp<2`, then `cleave init --check "pytest -q" --workdir booking_system_backend`
+   (exact commands and why in `demo/galaxium.md`; no `--setup`, verification reuses the venv).
 2. Reload Bob IDE, switch to ✂ Cleave, send: `Cleave feat/loyalty-and-seat-upgrades onto main`.
 3. Let it run red → green (≤ 3 repair rounds). Take the task summary screenshot.
 4. Save 3+ real hook payloads to `packages/engine/tests/payloads/` and note how MCP calls
