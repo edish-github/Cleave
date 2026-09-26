@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "cleave": {
+      "command": "cleave",
+      "args": ["mcp"],
+      "alwaysAllow": [
+        "cleave_start",
+        "cleave_status",
+        "cleave_atoms",
+        "cleave_graph",
+        "cleave_propose_plan",
+        "cleave_move_atoms",
+        "cleave_verify",
+        "cleave_verify_status",
+        "cleave_read_log",
+        "cleave_describe_layer",
+        "cleave_finish"
+      ]
+    }
+  }
+}

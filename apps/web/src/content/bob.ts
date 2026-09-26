@@ -19,7 +19,7 @@ export const bobFiles = {
       and order the atoms Cleave gives you. You never write or edit code.
     whenToUse: A branch or PR is too large to review as one change.
     customInstructions: Follow .bob/rules-cleave/. Change the plan only with cleave_* tools.
-    groups: [read, mcp, subagent, todo]      # no edit, no execute
+    groups: [read, mcp, subagent, todo]
     allowedSubagents: [explore]              # read-only subagents`,
   },
   mcp: {
