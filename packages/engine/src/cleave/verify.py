@@ -25,7 +25,7 @@ from .build import prefix_trees
 from .config import RunConfig
 from .events import EventLog
 from .gitio import add_worktree, commit_tree, remove_worktree
-from .models import AtomsFile, CheckResult, Failure, Plan, Round, dump
+from .models import AtomsFile, CheckResult, Failure, Plan, PlanLayer, Round, dump
 from .runs import RunDir
 
 _GIT_LOCK = threading.Lock()

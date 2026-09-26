@@ -53,7 +53,8 @@ def tree_of(repo: Path, commit: str) -> str:
 def is_clean(repo: Path) -> bool:
     """True when the working tree has no uncommitted changes. atomize refuses a dirty tree."""
     out = git(repo, "status", "--porcelain", "--untracked-files=all")
-    return len(out.strip()) == 0
+    lines = [line for line in out.splitlines() if line.strip() and not line[3:].startswith(".cleave/")]
+    return len(lines) == 0
 
 
 def diff(repo: Path, base: str, head: str) -> str:
