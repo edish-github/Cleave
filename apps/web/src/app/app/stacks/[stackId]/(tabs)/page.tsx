@@ -9,7 +9,7 @@ import { ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Stat } from "@/components/ui/Stat";
 import { cn } from "@/lib/cn";
-import { formatDuration, formatNumber, pad2, plural, shortHash, timeAgo } from "@/lib/format";
+import { coinsOrDash, countOrDash, formatNumber, pad2, plural, secondsOrDash, shortHash, timeAgo } from "@/lib/format";
 import { routes } from "@/lib/site";
 import { requestNow, requireStack } from "@/server/queries";
 
@@ -24,7 +24,19 @@ export default async function StackOverviewPage({ params }: { params: Promise<{ 
   const failing = layers.find((l) => l.status === "fail");
 
   const hero =
-    stack.status === "review" ? (
+    stack.status === "failed" ? (
+      <StatusHero
+        status="failed"
+        message={stack.error ?? "The run stopped before every check finished."}
+        actions={
+          <ButtonLink href={routes.activity(stack.id)} variant="secondary" size="sm">
+            See what happened
+          </ButtonLink>
+        }
+      />
+    ) : stack.status === "analyzing" ? (
+      <StatusHero status="analyzing" message="This run is still in progress. Results appear when it's pushed." />
+    ) : stack.status === "review" ? (
       <StatusHero
         status="review"
         message={
@@ -157,12 +169,12 @@ export default async function StackOverviewPage({ params }: { params: Promise<{ 
             <Card>
               <dl className="divide-y divide-line text-[14px]">
                 <BobRow label="Ran in" value={`${bob.surface} · ${bob.mode}`} />
-                <BobRow label="Subagents" value={`${bob.subagents} read-only`} />
-                <BobRow label="Cleave tool calls" value={String(bob.mcpCalls)} />
+                <BobRow label="Subagents" value={bob.subagents === null ? "—" : `${bob.subagents} read-only`} />
+                <BobRow label="Cleave tool calls" value={countOrDash(bob.mcpCalls)} />
                 <BobRow label="Plan changes" value={plural(verification.repairs.length, "atom move")} />
                 <BobRow label="Lines of code written" value={String(verification.foreignLines)} strong />
-                <BobRow label="Bobcoins" value={bob.bobcoins.toFixed(2)} />
-                <BobRow label="Duration" value={formatDuration(bob.durationSec * 1000)} />
+                <BobRow label="Bobcoins" value={coinsOrDash(bob.bobcoins)} />
+                <BobRow label="Duration" value={secondsOrDash(bob.durationSec)} />
               </dl>
             </Card>
           </Section>

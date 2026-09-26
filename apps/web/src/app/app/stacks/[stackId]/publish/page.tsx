@@ -2,6 +2,7 @@ import { ArrowRight, Check, GitBranch, Info } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { PageContainer } from "@/components/layout/PageHeader";
+import { CodeBlock } from "@/components/docs/CodeBlock";
 import { PublishAction } from "@/components/stack/PublishAction";
 import { BackLink } from "@/components/stack/StackHeader";
 import { HalfCircle } from "@/components/stack/StackStatus";
@@ -19,9 +20,9 @@ export default async function PublishPage({ params }: { params: Promise<{ stackI
   const stack = await requireStack(stackId);
   if (stack.status === "analyzing") redirect(routes.stack(stack.id));
   if (stack.status === "published") redirect(routes.published(stack.id));
-  const sample = api.source === "sample";
+  const sample = await api.isSample();
 
-  if (stack.status === "review") {
+  if (stack.status === "review" || stack.status === "failed") {
     return (
       <PageContainer width="narrow">
         <BackLink href={routes.stack(stack.id)}>{stack.title}</BackLink>
@@ -29,7 +30,9 @@ export default async function PublishPage({ params }: { params: Promise<{ stackI
           <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-warn-soft text-warn ring-1 ring-warn-line">
             <HalfCircle className="size-5" />
           </span>
-          <h1 className="mt-5 text-[20px] font-medium tracking-[-0.01em] text-ink">Resolve the review first</h1>
+          <h1 className="mt-5 text-[20px] font-medium tracking-[-0.01em] text-ink">
+            {stack.status === "failed" ? "This run didn't finish" : "Resolve the review first"}
+          </h1>
           <p className="mx-auto mt-2 max-w-[420px] text-[14px] text-ink-3">
             Only stacks where every layer passes on its own can be published. One decision is waiting on the
             Verification tab.
@@ -101,6 +104,17 @@ export default async function PublishPage({ params }: { params: Promise<{ stackI
         </ul>
       </Card>
 
+      {!sample ? (
+        <div className="mt-6 space-y-3">
+          <p className="text-[14px] leading-relaxed text-ink-2">
+            Publishing pushes the branches and opens the pull requests with your own GitHub credentials, from the
+            repository where the run happened:
+          </p>
+          <CodeBlock title="Terminal" code={`cleave publish --run ${stack.runId ?? "<run id>"}\ncleave push --run ${stack.runId ?? "<run id>"} --title ${JSON.stringify(stack.title)}${stack.prNumber ? ` --pr ${stack.prNumber}` : ""}`} wrap />
+          <p className="text-[13px] text-ink-3">This page switches to the published pull requests once the run is pushed again.</p>
+        </div>
+      ) : null}
+
       {sample ? (
         <p className="mt-6 flex gap-3 rounded-2xl border border-accent-line bg-accent-soft/60 px-4 py-3.5 text-[13px] leading-relaxed text-ink-2">
           <Info className="mt-0.5 size-4 shrink-0 text-accent-ink" />
@@ -113,9 +127,9 @@ export default async function PublishPage({ params }: { params: Promise<{ stackI
 
       <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
         <ButtonLink href={routes.stack(stack.id)} variant="ghost">
-          Cancel
+          {sample ? "Cancel" : "Back to stack"}
         </ButtonLink>
-        <PublishAction stackId={stack.id} layerCount={layers.length} label={sample ? "Publish stack" : "Publish to GitHub"} />
+        {sample ? <PublishAction stackId={stack.id} layerCount={layers.length} label="Publish stack" /> : null}
       </div>
     </PageContainer>
   );

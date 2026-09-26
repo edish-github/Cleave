@@ -8,6 +8,7 @@ import { BackendRequiredButton } from "@/components/ui/BackendRequired";
 import { ButtonLink } from "@/components/ui/Button";
 import { formatDateTime, formatNumber, pad2 } from "@/lib/format";
 import { routes } from "@/lib/site";
+import type { CiState } from "@/lib/types";
 import { requireStack } from "@/server/queries";
 import { api } from "@/services";
 
@@ -18,7 +19,8 @@ export default async function PublishedPage({ params }: { params: Promise<{ stac
   const stack = await requireStack(stackId);
   if (stack.status === "analyzing") redirect(routes.stack(stack.id));
   if (stack.status !== "published") redirect(routes.publish(stack.id));
-  const sample = api.source === "sample";
+  const sample = await api.isSample();
+  const ci = await api.stacks.ciStatus(stack.id).catch(() => ({}) as Record<number, CiState>);
   const { layers } = stack;
 
   return (
@@ -73,16 +75,31 @@ export default async function PublishedPage({ params }: { params: Promise<{ stac
                 {formatNumber(layer.additions)} −{formatNumber(layer.deletions)}
               </p>
             </div>
-            <span className="hidden shrink-0 items-center gap-1 text-[12px] text-ok sm:flex">
-              <Check className="size-3.5" strokeWidth={2.6} /> Verified
-            </span>
+            {sample ? (
+              <span className="hidden shrink-0 items-center gap-1 text-[12px] text-ok sm:flex">
+                <Check className="size-3.5" strokeWidth={2.6} /> Verified
+              </span>
+            ) : (
+              <CiBadge state={ci[layer.index] ?? "none"} />
+            )}
+            {layer.prUrl ? (
+              <a
+                href={layer.prUrl}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Open pull request #${layer.prNumber}`}
+                className="rounded-full p-1.5 text-ink-3 hover:bg-subtle hover:text-ink"
+              >
+                <ArrowUpRight className="size-4" />
+              </a>
+            ) : null}
           </li>
         ))}
       </ol>
 
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
-        {stack.repoUrl ? (
-          <ButtonLink href={stack.repoUrl} target="_blank" rel="noreferrer" trailingIcon={<ArrowUpRight className="size-4" />}>
+        {!sample && stack.repoUrl ? (
+          <ButtonLink href={`${stack.repoUrl}/pulls`} target="_blank" rel="noreferrer" trailingIcon={<ArrowUpRight className="size-4" />}>
             Open on GitHub
           </ButtonLink>
         ) : (
@@ -110,5 +127,22 @@ export default async function PublishedPage({ params }: { params: Promise<{ stac
         </p>
       ) : null}
     </PageContainer>
+  );
+}
+
+const ciCopy: Record<CiState, { label: string; className: string }> = {
+  success: { label: "Checks pass", className: "text-ok" },
+  failure: { label: "Checks fail", className: "text-bad" },
+  pending: { label: "Checks running", className: "text-warn" },
+  none: { label: "No checks", className: "text-ink-3" },
+};
+
+function CiBadge({ state }: { state: CiState }) {
+  const copy = ciCopy[state];
+  return (
+    <span className={`hidden shrink-0 items-center gap-1.5 text-[12px] sm:flex ${copy.className}`}>
+      <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+      {copy.label}
+    </span>
   );
 }

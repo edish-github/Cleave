@@ -24,6 +24,7 @@ export default async function StackLayout({ children, params }: { children: Reac
   const stack = await requireStack(stackId);
   const events = await api.activity.forStack(stackId);
   const analyzing = stack.status === "analyzing" && stack.analysis !== null;
+  const sample = await api.isSample();
 
   return (
     <PageContainer width="wide">
@@ -62,7 +63,7 @@ export default async function StackLayout({ children, params }: { children: Reac
           serverNow={requestNow()}
           repoName={stack.repoName}
           prNumber={stack.prNumber}
-          sample={api.source === "sample"}
+          sample={sample}
         />
       ) : (
         <>
