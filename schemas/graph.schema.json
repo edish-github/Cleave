@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/edish-github/Cleave/main/schemas/graph.schema.json",
+  "title": "Graph",
+  "description": "graph.json: which atoms need which. An edge from A to B means A needs B, so B must sit in the same or an earlier layer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "edges",
+    "groups"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/edge"
+      }
+    },
+    "groups": {
+      "type": "array",
+      "description": "Forced groups: atoms in a dependency cycle (a strongly connected component) must share a layer.",
+      "items": {
+        "type": "array",
+        "minItems": 2,
+        "items": {
+          "$ref": "./atom.schema.json#/$defs/atom_id"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "edge_kind": {
+      "type": "string",
+      "enum": [
+        "import",
+        "call",
+        "model",
+        "fixture",
+        "file_order",
+        "runtime"
+      ],
+      "description": "import/call/model: Python AST. fixture: pytest fixture by name. file_order: create-before-edit or same-file order. runtime: found only when a layer failed its check."
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "kind",
+        "source"
+      ],
+      "properties": {
+        "from": {
+          "$ref": "./atom.schema.json#/$defs/atom_id"
+        },
+        "to": {
+          "$ref": "./atom.schema.json#/$defs/atom_id"
+        },
+        "kind": {
+          "$ref": "#/$defs/edge_kind"
+        },
+        "symbol": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "static",
+            "verification"
+          ]
+        }
+      }
+    }
+  }
+}
