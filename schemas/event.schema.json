@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/edish-github/Cleave/main/schemas/event.schema.json",
+  "title": "Event",
+  "description": "One line of events.ndjson. Engine steps, Bob's MCP calls, hook decisions and runner messages all land here, and the Activity tab is built from them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ts",
+    "source",
+    "type",
+    "payload"
+  ],
+  "properties": {
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "engine",
+        "bob",
+        "hook",
+        "runner",
+        "mcp"
+      ]
+    },
+    "type": {
+      "type": "string",
+      "pattern": "^[a-z_]+(\\.[a-z_]+)+$",
+      "description": "Known types: run.started, run.finished, atoms.cut, graph.built, slices.written, subagent.spawned, subagent.finished, plan.proposed, plan.checked, verify.started, layer.passed, layer.failed, verify.passed, atoms.moved, review.required, layers.merged, layer.described, hook.allowed, hook.blocked, mcp.called, stack.published. Unknown types are shown generically."
+    },
+    "run_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tool": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Tool or command behind the event, e.g. cleave_move_atoms."
+    },
+    "payload": {
+      "type": "object"
+    }
+  }
+}
