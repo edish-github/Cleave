@@ -93,29 +93,38 @@ def edges(repo: Path, atoms: AtomsFile) -> list[Edge]:
 
         for n in ast.walk(tree):
             if isinstance(n, ast.ImportFrom) and n.lineno in lines and n.module:
-                mod_file = n.module.replace(".", "/") + ".py"
-                mod_init = n.module.replace(".", "/") + "/__init__.py"
+                mod_path = n.module.replace(".", "/")
                 for alias in n.names:
                     name = alias.name
+                    submod = f"{mod_path}/{name}.py"
+                    mod_file = f"{mod_path}.py"
+                    mod_init = f"{mod_path}/__init__.py"
                     for other in atoms.atoms:
                         if other.id == a.id:
                             continue
-                        if other.file in (mod_file, mod_init):
+                        f = other.file
+                        is_match = False
+                        if f == submod or f.endswith("/" + submod):
+                            is_match = True
+                        elif f == mod_file or f.endswith("/" + mod_file) or f == mod_init or f.endswith("/" + mod_init):
                             if other.kind == "new_file" or (other.symbols and name in other.symbols.defines):
-                                key = (a.id, other.id, "import")
-                                if key not in seen:
-                                    seen.add(key)
-                                    res.append(
-                                        Edge(
-                                            **{
-                                                "from": a.id,
-                                                "to": other.id,
-                                                "kind": "import",
-                                                "symbol": name,
-                                                "source": "static",
-                                            }
-                                        )
+                                is_match = True
+
+                        if is_match:
+                            key = (a.id, other.id, "import")
+                            if key not in seen:
+                                seen.add(key)
+                                res.append(
+                                    Edge(
+                                        **{
+                                            "from": a.id,
+                                            "to": other.id,
+                                            "kind": "import",
+                                            "symbol": name,
+                                            "source": "static",
+                                        }
                                     )
+                                )
 
     # 2. Within same file
     for a in atoms.atoms:

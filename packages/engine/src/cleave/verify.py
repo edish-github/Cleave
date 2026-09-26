@@ -10,6 +10,7 @@ Starting point: research/kill-tests/cleave_verify.py.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -118,15 +119,29 @@ def verify(
 
         try:
             work_dir = (worktree_dir / config.working_directory) if config.working_directory else worktree_dir
+            timeout = getattr(config, "timeout_s", 600)
+
+            run_env = os.environ.copy()
+            for venv_candidate in [
+                work_dir / ".venv",
+                repo / (config.working_directory or "") / ".venv",
+                repo / ".venv",
+            ]:
+                if venv_candidate.is_dir() and (venv_candidate / "bin").is_dir():
+                    run_env["VIRTUAL_ENV"] = str(venv_candidate)
+                    run_env["PATH"] = f"{venv_candidate / 'bin'}:{run_env.get('PATH', '')}"
+                    break
+
             setup_output = ""
             if config.setup_command:
                 sproc = subprocess.run(
                     config.setup_command,
                     shell=True,
                     cwd=str(work_dir),
+                    env=run_env,
                     capture_output=True,
                     text=True,
-                    timeout=config.timeout_seconds,
+                    timeout=timeout,
                 )
                 setup_output = (sproc.stdout or "") + (sproc.stderr or "")
 
@@ -136,16 +151,17 @@ def verify(
                     config.check_command,
                     shell=True,
                     cwd=str(work_dir),
+                    env=run_env,
                     capture_output=True,
                     text=True,
-                    timeout=config.timeout_seconds,
+                    timeout=timeout,
                 )
                 exit_code = cproc.returncode
                 output = (cproc.stdout or "") + (cproc.stderr or "")
                 timed_out = False
             except subprocess.TimeoutExpired as e:
                 exit_code = -1
-                output = (e.stdout or "") + (e.stderr or "") + f"\nTimeout expired after {config.timeout_seconds}s"
+                output = (e.stdout or "") + (e.stderr or "") + f"\nTimeout expired after {timeout}s"
                 timed_out = True
 
             duration_ms = int((time.time() - start_time) * 1000)
@@ -210,7 +226,7 @@ def verify(
             if worktree_dir.exists():
                 shutil.rmtree(worktree_dir, ignore_errors=True)
 
-    max_workers = min(len(plan.layers), 8) or 1
+    max_workers = min(len(plan.layers), getattr(config, "parallel", 4)) or 1
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [
             executor.submit(verify_layer, idx, spec, tree)
