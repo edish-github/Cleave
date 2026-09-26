@@ -77,3 +77,18 @@ export function directory(path: string): string {
   parts.pop();
   return parts.join("/");
 }
+
+/** Shown where a run didn't report a value. */
+export const NOT_REPORTED = "—";
+
+export function countOrDash(value: number | null | undefined): string {
+  return value === null || value === undefined ? NOT_REPORTED : formatNumber(value);
+}
+
+export function coinsOrDash(value: number | null | undefined): string {
+  return value === null || value === undefined ? NOT_REPORTED : value.toFixed(2);
+}
+
+export function secondsOrDash(value: number | null | undefined): string {
+  return value === null || value === undefined ? NOT_REPORTED : formatDuration(value * 1000);
+}

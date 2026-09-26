@@ -12,6 +12,7 @@ export const routes = {
   login: "/login",
   signup: "/signup",
   bobDocs: "/docs/bob",
+  results: "/results",
   proof: (stackId: string) => `/proof/${stackId}`,
   app: "/app",
   newSplit: (repoId?: string, pr?: number) =>

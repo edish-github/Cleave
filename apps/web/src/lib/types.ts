@@ -4,7 +4,7 @@
  * When the backend lands, generate these from the JSON Schemas instead of editing by hand.
  */
 
-export type StackStatus = "analyzing" | "verified" | "review" | "published";
+export type StackStatus = "analyzing" | "verified" | "review" | "failed" | "published";
 export type LayerStatus = "pass" | "fail";
 export type CheckState = "pass" | "attention";
 export type Visibility = "public" | "private";
@@ -72,7 +72,7 @@ export interface PullRequest {
   analyzable: boolean;
 }
 
-export type AtomKind = "hunk" | "new-file" | "deleted-file";
+export type AtomKind = "hunk" | "new-file" | "deleted-file" | "rename" | "binary" | "mode";
 
 export interface Atom {
   /** Content hash of the hunk, as produced by `cleave atomize`. */
@@ -89,7 +89,7 @@ export interface Atom {
   patchTruncated: boolean;
 }
 
-export type DependencyKind = "import" | "call" | "model" | "fixture" | "runtime";
+export type DependencyKind = "import" | "call" | "model" | "fixture" | "file_order" | "runtime";
 
 export interface Dependency {
   id: string;
@@ -122,6 +122,19 @@ export interface Layer {
   /** Set when this layer went green only after a repair. */
   repairedInRound: number | null;
   prNumber: number | null;
+  /** Link to the layer's pull request, once published (live workspace). */
+  prUrl?: string | null;
+}
+
+export type CiState = "success" | "failure" | "pending" | "none";
+
+/** A GitHub repository the user could connect (live workspace). */
+export interface AvailableRepository {
+  fullName: string;
+  language: string | null;
+  private: boolean;
+  pushedAt: string | null;
+  connected: boolean;
 }
 
 export type CheckId = "coverage" | "order" | "fidelity" | "shippability" | "partition";
@@ -180,7 +193,7 @@ export interface VerificationIssue {
 }
 
 export interface VerificationResult {
-  state: "verified" | "review";
+  state: "verified" | "review" | "failed";
   command: string;
   headTree: string;
   topTree: string;
@@ -194,12 +207,13 @@ export interface VerificationResult {
 export interface BobRunStats {
   surface: "Bob IDE" | "bob run";
   mode: string;
-  bobcoins: number;
-  tokens: number;
-  toolCalls: number;
-  mcpCalls: number;
-  subagents: number;
-  durationSec: number;
+  /** Null when the run didn't report it (e.g. Bob IDE runs report no cost). */
+  bobcoins: number | null;
+  tokens: number | null;
+  toolCalls: number | null;
+  mcpCalls: number | null;
+  subagents: number | null;
+  durationSec: number | null;
   hookAllowed: number;
   hookBlocked: number;
 }
@@ -264,6 +278,10 @@ export interface Stack {
   updatedAt: string;
   publishedAt: string | null;
   analysis: AnalysisState | null;
+  /** Why the run stopped, when status is "failed". */
+  error?: string | null;
+  /** The engine run this view shows (live workspace only). */
+  runId?: string | null;
 }
 
 export interface StackSummary {
