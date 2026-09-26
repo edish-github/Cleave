@@ -1,124 +1,110 @@
 # Cleave web app (`apps/web`)
 
-The web surface of Cleave: start splits, follow a run, review the proof, publish the stack,
-and share a public proof page. It never splits anything itself. Bob and the engine do that;
-this app shows what they produced.
+Stack pages, public proof pages and the ingest API. The app never splits anything itself:
+Bob and the engine do that on your machine, and `cleave push` sends the finished run here.
 
-Today it runs on a built-in **sample workspace** (clearly labelled in the UI). The backend
-client plugs in behind one interface without touching pages. See `src/services/README.md`.
+Two workspaces, one UI:
 
-## Run it
+- **Live**: sign in with GitHub. Your repositories, stacks and runs, stored in Postgres.
+- **Sample**: "Explore the sample workspace" on `/login`. Labelled sample data, no account.
+
+## Run it locally
 
 ```bash
 cd apps/web
 cp .env.example .env.local
 npm install
-npm run dev          # http://localhost:3000
+npm run dev                      # sample workspace only: http://localhost:3000
 ```
 
-Sign in with any email and an 8+ character password, or "Continue with GitHub", which opens
-the sample workspace and says so. Requires Node 20.9+.
+For the live workspace locally, add a Postgres URL, `AUTH_SECRET`, and either a GitHub
+OAuth app or `CLEAVE_DEV_LOGIN=1` (development builds only), then `npm run db:migrate`.
 
 | Script | What it does |
 | --- | --- |
-| `npm run dev` | Dev server (Turbopack) |
-| `npm run build` / `npm start` | Production build and server |
-| `npm run lint` | ESLint 9 flat config (`eslint-config-next`) |
-| `npm run typecheck` | `next typegen` then `tsc --noEmit` |
+| `npm run dev` / `build` / `start` | Next.js |
+| `npm run lint` / `typecheck` | ESLint 9, `next typegen && tsc --noEmit` |
+| `npm run contracts` | Regenerate `src/lib/contracts.ts` and the server's schema copy from `/schemas` |
+| `npm run contracts:check` | Fail if they're out of date (CI) |
+| `npm run db:generate` | New migration from `src/server/db/schema.ts` into `drizzle/` |
+| `npm run db:migrate` | Apply migrations to `DATABASE_URL` |
+
+## Deploy on Vercel
+
+1. **Import** the repository. Root Directory: `apps/web`. Framework: Next.js.
+   The `vercel-build` script applies migrations, then builds.
+2. **Database:** add Neon from the Vercel Marketplace. It sets `DATABASE_URL` and
+   `DATABASE_URL_UNPOOLED`.
+3. **GitHub OAuth app** (GitHub → Settings → Developer settings → OAuth Apps):
+   Homepage `https://<your-domain>`, callback `https://<your-domain>/api/auth/callback/github`.
+4. **Environment variables:** `AUTH_SECRET` (`openssl rand -base64 32`), `AUTH_GITHUB_ID`,
+   `AUTH_GITHUB_SECRET`, `NEXT_PUBLIC_SITE_URL=https://<your-domain>`.
+5. **Deploy**, sign in with GitHub, open Settings → Bob & runners, create a token.
+6. **Push a run** from the repository you split:
+
+   ```bash
+   export CLEAVE_URL=https://<your-domain> CLEAVE_TOKEN=clv_…
+   cleave push --title "Loyalty tiers & seat upgrades" --pr 1 \
+     --head-branch feat/loyalty-and-seat-upgrades --base-branch main
+   ```
+
+   The response includes the stack and proof URLs. Make the proof public from the stack's
+   Share proof button.
+
+Without step 2–4 the deployment serves the sample workspace only, and says so.
 
 ## Routes
 
-| Route | Page | Notes |
+| Route | Page |
+| --- | --- |
+| `/`, `/docs/bob`, `/login` | Landing (links the newest public proof), Bob setup guide, sign-in. `/signup` redirects to `/login` |
+| `/results` | Evaluation table: B1 vs Cleave per constructed diff, from runs pushed with `--eval-group` |
+| `/proof/[stackId]` | Public proof, with a share image (`opengraph-image`). 404 unless the stack is public |
+| `/app` | Overview |
+| `/app/new` | New split. Live: your open pull requests from GitHub, then the exact Bob IDE commands for the one you pick |
+| `/app/stacks`, `/app/stacks/[id]` | Stacks list, stack overview |
+| `/app/stacks/[id]/layers`, `…/layers/[layer]` | Layers, one layer's hunks and edges |
+| `/app/stacks/[id]/verification`, `…/activity` | Checks and rounds, run timeline |
+| `/app/stacks/[id]/publish`, `…/published` | Publish plan, published pull requests |
+| `/app/repositories`, `/app/repositories/[id]` | Repositories (connect one from your GitHub list), one repository with its open pull requests |
+| `/app/settings` (+ `/github`, `/runners`, `/appearance`) | Profile, GitHub, runner tokens, theme |
+
+| API | Auth | Purpose |
 | --- | --- | --- |
-| `/` | Landing | Hero visual, product, Map · Layer · Prove, Bob section |
-| `/login`, `/signup` | Auth | Validation, pending states, GitHub option |
-| `/docs/bob` | Bob setup guide | Mode, MCP tools, hooks, IDE and `bob run` usage |
-| `/proof/[stackId]` | Public proof | No login. Real 404 unless the stack is public |
-| `/app` | Overview | Needs-you cards, recent stacks, largest open PR, activity |
-| `/app/new` | New split | Repo → PR → review; deep link `?repo=&pr=` |
-| `/app/stacks` | Stacks | Status filter with counts, search, empty states |
-| `/app/stacks/[id]` | Stack overview | Status hero, sizes, layers, proof, Bob's work |
-| `/app/stacks/[id]/layers` | Layers | Rationale, stats, branch per layer |
-| `/app/stacks/[id]/layers/[n]` | One layer | Verbatim hunks, needs / needed-by edges, prev/next |
-| `/app/stacks/[id]/verification` | Verification | Checks, tree fidelity, per-layer results, rounds, review issue |
-| `/app/stacks/[id]/activity` | Activity | Timeline with source filter and detail drawer |
-| `/app/stacks/[id]/publish` | Publish | Branch plan, pre-publish checks, guards for other states |
-| `/app/stacks/[id]/published` | Published | Stacked PR list |
-| `/app/repositories` | Repositories | |
-| `/app/repositories/[id]` | Repository | Open PRs by size, stacks, run settings |
-| `/app/settings` (+ `/github`, `/runners`, `/appearance`) | Settings | Profile, GitHub, Bob & runners, theme and motion |
+| `POST /api/ingest/bundle` | `Bearer clv_…` runner token | Store a run pushed by `cleave push` (gzip JSON, validated against `/schemas/bundle.schema.json`). Runs with `eval` are public and feed `/results` |
+| `GET/POST /api/auth/[...nextauth]` | — | GitHub sign-in (Auth.js) |
 
-`/app/overview` redirects to `/app`. `src/proxy.ts` sends signed-out visitors to
-`/login?next=…` and signed-in visitors away from `/login` and `/signup`.
-
-Every data route has a `loading.tsx` skeleton shaped like the page, an `error.tsx` boundary
-with retry, and a not-found state (stack, layer, repository, proof, global 404).
-
-## How data flows
+## How it's built
 
 ```
-page (server component) ──► api (CleaveClient) ──► sample workspace   CLEAVE_DATA_SOURCE=sample
-server action           ──┘                    └─► http client       CLEAVE_DATA_SOURCE=api (to build)
+src/app/            routes (App Router); (public) group for landing, docs, login
+src/components/     ui primitives, stack views, landing, settings
+src/services/       api → live (Postgres) or sample client; see src/services/README.md
+src/server/         db (Drizzle schema, client), auth, ingest, runner tokens, schema validation, actions,
+                    github.ts (REST calls with the signed-in user's token: repos, open PRs, CI state)
+src/lib/contracts.ts  generated from /schemas — engine shapes
+src/lib/types.ts    view models the pages render
+drizzle/            SQL migrations
+test/fixtures/      sample-bundle.json: a sample stack exported as a push bundle
 ```
 
-- `src/services/types.ts`: the `CleaveClient` contract (session, user, repositories,
-  stacks, activity, search).
-- `src/services/sample/`: dataset specs, `build.ts` (derives every number from the specs),
-  cookie state for mutations, simulated read latency (`SAMPLE_LATENCY_MS`).
-- `src/server/actions/`: server actions for auth, starting a split, publishing, resolving a
-  review, sharing and the profile. They call `api` only.
-- `src/lib/types.ts`: domain models mirroring the planned JSON Schemas.
-
-### Sample dataset
-
-| Stack | State | Shape |
-| --- | --- | --- |
-| galaxium-travels #184 "Add cancellations & refunds" | Verified, public proof | 5 layers, 37 atoms, 12 dependencies, 1 repair |
-| galaxium-travels #179 "Loyalty tiers & seat upgrades" | Published | 4 layers, 21 atoms |
-| orbit-pricing #57 "Move fare math to Decimal" | Review required | Layer 02 fails alone after 2 repairs; merge resolves it |
-| ledger-sync #41 "Batch reconciliation job" | Verified (via `bob run`) | 3 layers, 12 atoms |
-| galaxium-travels #188 "Waitlist for sold-out flights" | Open PR → analyze it | 3 layers, 18 atoms |
-
-## What is honest about the sample workspace
-
-- A "Sample workspace" pill sits in the top bar; publish, published and proof pages say
-  what is simulated.
-- Starting a split replays the recorded run for that PR (14 s), and the progress page says so.
-- Actions that need GitHub or the backend (connect GitHub, connect repository, runner tokens,
-  open on GitHub, edit run settings) open a dialog explaining why they aren't available,
-  instead of pretending.
-- Verification shows Cleave's real checks: atom coverage, dependency order, tree fidelity,
-  layer shippability and "no new code" (0 lines).
-
-## Design
-
-Warm neutral canvas, one indigo accent, green for proven and amber for "needs you". Geist
-Sans and Mono for the app, Instrument Serif for editorial headlines on public pages. Tokens
-live in `src/app/globals.css` (`@theme inline`). The app supports light, dark and system
-themes and a reduce-motion switch; public pages stay light. Native `<dialog>` for modals and
-drawers, radio-group semantics for segmented controls, skip link, visible focus rings.
-
-Images: two landing placeholders. See `ASSETS.md`.
+Ten tables (`src/server/db/schema.ts`): users, repositories, stacks, runs, atoms,
+plan_versions, layers, checks, events, runners. Runner tokens are stored as SHA-256 hashes
+and shown once.
 
 ## Dependencies
 
-Runtime: `next` 16.3.6, `react` / `react-dom` 19.3.0, `lucide-react`, `geist`,
-`@fontsource/instrument-serif`, `server-only`, `tailwind-merge`.
-Dev: `tailwindcss` 4 + `@tailwindcss/postcss`, `typescript` 5, `eslint` 9 +
-`eslint-config-next`, `@types/node`, `@types/react`, `@types/react-dom`.
+Runtime: `next` 16.3.6, `react` 19.3, `next-auth` 5 (beta), `drizzle-orm`, `postgres`,
+`ajv` + `ajv-formats`, `lucide-react`, `geist`, `@fontsource/instrument-serif`,
+`tailwind-merge`, `server-only`.
+Dev: `tailwindcss` 4, `typescript` 5, `eslint` 9 + `eslint-config-next`, `drizzle-kit`,
+`json-schema-to-typescript`, `tsx`.
 
 ## Known gaps
 
-- `/results` (B1 vs Cleave) is left out until real evaluation runs exist. The New split
-  mode selector (Cleave or baseline) and runner picker ship with it.
-- Activity is a static timeline; live runs will stream over SSE (`/api/runs/:id/stream`).
-- `/docs/bob` content lives in `src/content/bob.ts`. Once the engine is in the repo, read
-  `packages/engine/src/cleave/bob_config/*` at build time instead. The hook JSON shape is
-  still open check C1.
-- Auth is a sample cookie session. The routes doc plans GitHub-only sign-in with Auth.js;
-  decide then whether `/signup` stays or redirects to `/login`.
-- Inside `/app`, not-found pages render correctly but return HTTP 200, because loading
-  boundaries start streaming first. Public `/proof/[id]` returns a real 404.
-- Times are shown in UTC.
-- No automated test suite is committed yet. Verified manually with Playwright; see the
-  handoff report.
+- Starting splits, publishing and merging layers from the browser need the runner (P1).
+  Until then the live pages show the exact commands to run instead.
+- Activity is read when the page loads; live updates arrive with the runner.
+- Open pull requests and CI state need a GitHub sign-in. The development login has no
+  GitHub token, and the pages say so instead of showing an empty list.
+- Inside `/app`, not-found pages return HTTP 200 (streaming); `/proof/[id]` returns a real 404.
