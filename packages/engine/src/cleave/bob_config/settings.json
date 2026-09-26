@@ -1,10 +1,10 @@
 {
   "hooks": {
     "PreToolUse": [
-      { "matcher": "*", "hooks": [{ "type": "command", "command": "python3 .bob/hooks/guard.py" }] }
+      { "hooks": [{ "type": "command", "command": "python3 .bob/hooks/guard.py", "timeout": 10 }] }
     ],
     "PostToolUse": [
-      { "matcher": "*", "hooks": [{ "type": "command", "command": "python3 .bob/hooks/audit.py" }] }
+      { "hooks": [{ "type": "command", "command": "python3 .bob/hooks/audit.py", "timeout": 10 }] }
     ]
   }
 }
