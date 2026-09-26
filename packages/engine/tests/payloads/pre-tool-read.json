@@ -1,0 +1,10 @@
+{
+  "payload": {
+    "hook_event_name": "PreToolUse",
+    "tool_name": "read_file",
+    "tool_input": {
+      "path": "booking_system_backend/models.py"
+    }
+  },
+  "expect": "allow"
+}

@@ -1,0 +1,12 @@
+{
+  "payload": {
+    "hook_event_name": "PreToolUse",
+    "tool_name": "use_mcp_tool",
+    "tool_input": {
+      "server_name": "cleave",
+      "tool_name": "cleave_status",
+      "arguments": {}
+    }
+  },
+  "expect": "allow"
+}

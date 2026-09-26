@@ -1,0 +1,8 @@
+{
+  "payload": {
+    "hook_event_name": "PreToolUse",
+    "tool_name": "cleave_verify",
+    "tool_input": {}
+  },
+  "expect": "allow"
+}
