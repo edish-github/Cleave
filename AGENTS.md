@@ -54,7 +54,7 @@ Cleave/
 │   ├── 01-engine.md                  ●   engine rules
 │   └── 02-web.md                     ●   web rules
 ├── .github/workflows/ci.yml          ● engine pytest (unit specs) + web contracts/typecheck/lint/build
-├── schemas/                          ● atom, graph, plan, report, event, bundle (.schema.json)
+├── schemas/                          ● atom, graph, plan, report, event, bundle, job (.schema.json)
 ├── demo/galaxium.md                  ● the demo PR (edish-github/galaxium-travels #1) and how to rerun it
 ├── bob_sessions/                     ○ SsnFall_taskNN_<desc>_summary.png, one per Bob task (§6)
 ├── eval/                             ○ Phases 4 and 6
@@ -81,7 +81,7 @@ Cleave/
 │   │   ├── baselines.py                                            ◐ Phase 4 · task09
 │   │   ├── publish.py                                              ◐ Phase 5 · task10
 │   │   ├── eval/{build_dataset,metrics}.py                         ◐ Phase 6 · task11
-│   │   ├── runner/{client,job,bobshell}.py                         ◐ Phase 7 · task13 (P1)
+│   │   ├── runner/{client,job,bobshell}.py                         ◐ Phase 7 · task13 (P1), spec: test_runner.py
 │   │   └── describe.py                                             ◐ P2 (watsonx.ai), cut first
 │   └── tests/
 │       ├── conftest.py               ● `make_repo`: a small git repo with a realistic PR
@@ -89,6 +89,7 @@ Cleave/
 │       ├── test_atomize_build.py test_graph.py test_plan.py test_verify.py test_report.py
 │       │                             ◐ red specs for Phase 2
 │       ├── test_mcp.py test_hooks.py ◐ red specs for Phase 3
+│       ├── test_runner.py            ◐ red spec for Phase 7 (runner protocol, client side)
 │       ├── test_galaxium.py          ◐ integration, needs GALAXIUM_REPO
 │       ├── test_publish.py           ○ Phase 5 (Bob writes it, §5)
 │       ├── test_eval.py              ○ Phase 6 (Bob writes it, §5)
@@ -140,11 +141,12 @@ tokens come from the deployed app: Settings → Bob & runners → Create token. 
 
 | Tier | Command (from the package) | Runs in CI | When |
 | --- | --- | --- | --- |
-| Engine unit specs | `uv run pytest -q -m "not integration and not bob"` | yes | every engine task |
+| Engine unit specs | `uv run pytest -q -m "not integration and not bob and not runner"` | yes | every engine task |
 | One spec file | `uv run pytest -q tests/test_graph.py` | — | while working on a task |
 | Galaxium integration | `GALAXIUM_REPO=~/galaxium-travels uv run pytest -q -m integration` | no | end of Phase 2, before M1 |
 | … with the backend's tests | add `GALAXIUM_VERIFY=1` (needs its requirements installed) | no | end of Phase 2 |
 | Real Bob payloads | `uv run pytest -q -m bob` | no | after payloads are saved (Phase 3) |
+| Runner (P1) | `uv run pytest -q -m runner` | no | Phase 7 |
 | Engine lint | `uv run ruff check src tests` | no | before committing |
 | Contracts in sync | `npm run contracts:check` | yes | after any schema change |
 | Web | `npm run typecheck && npm run lint && npm run build` | yes | every web change |
@@ -235,7 +237,7 @@ Use Bob's **Code** mode for engine tasks and **✂ Cleave** for runs.
 **task05 · report, and the real demo diff**
 - Files: `report.py`
 - Spec: `tests/test_report.py`, then `tests/test_galaxium.py`
-- Check: `uv run pytest -q -m "not integration and not bob"` (only `test_mcp.py` and
+- Check: `uv run pytest -q -m "not integration and not bob and not runner"` (only `test_mcp.py` and
   `test_hooks.py` may still fail), then
   `GALAXIUM_REPO=~/galaxium-travels GALAXIUM_VERIFY=1 uv run pytest -q -m integration`
 - Done when: a verified run has the five checks passing in order; layers carry branch, tree
@@ -261,7 +263,7 @@ to 10:45 and cut Phase 7.
 - Files: everything under `bob_config/` (see `bob_config/README.md`)
 - Start from: the text on `/docs/bob` (`apps/web/src/content/bob.ts`); keep both identical
 - Spec: `tests/test_mcp.py` (`shipped` cases), `tests/test_hooks.py`
-- Check: `uv run pytest -q -m "not integration and not bob"`, all green
+- Check: `uv run pytest -q -m "not integration and not bob and not runner"`, all green
 - Done when: the mode has groups `[read, mcp, subagent, todo]` only; `mcp.json` allows exactly
   `TOOL_NAMES`; the guard allows reads, explore subagents, todos and `cleave_*` calls while
   `.cleave/active` exists and exits 2 on anything else; the audit hook logs every call.
@@ -335,15 +337,23 @@ If Bobcoins run low: use the 5 held back and stop at 3 datasets.
 
 ### Phase 7 — live runner (13:45–15:00, 3 coins, P1: cut first)
 
-- Web first (outside Bob): `POST /api/runner/claim` (25 s long poll), `POST /api/runner/heartbeat`,
-  `POST /api/runner/runs/:runId/events` (NDJSON), `PUT /api/runner/runs/:runId/artifacts/:name`,
-  `POST /api/runner/runs/:runId/complete`, all with the runner token; New split creates a
-  queued run; Activity polls every 2 s.
-- **task13**: `runner/client.py`, `runner/job.py`, `runner/bobshell.py`, `cli.py` (`cleave runner`).
-  The job clones, overlays `bob_config/`, atomizes, runs `bob run --mode cleave --format
-  stream-json --max-cost <cap>` and uploads artifacts.
-- Done when: a run started from New split finishes on the developer's machine and its
-  Activity updates while it runs.
+The web side is built: `schemas/job.schema.json`, the `jobs` and `job_events` tables,
+`POST /api/runner/claim` (25 s long poll → Job or 204), `/api/runner/heartbeat` (409 when
+its `job_id` is no longer running), `/api/runner/runs/:id/events` (NDJSON of events) and
+`/api/runner/runs/:id/complete` (bundle → stored like `cleave push`, or a failure reason).
+New split queues a run ("Run on …"), `/app/runs/:id` shows it and refreshes every 2 s,
+and it can be cancelled there. Server code: `apps/web/src/server/jobs.ts`.
+
+**task13 · the runner**
+- Files: `runner/client.py`, `runner/bobshell.py`, `runner/job.py`, `cli.py` (wire
+  `cleave runner`, reading `CLEAVE_URL` and `CLEAVE_TOKEN`), and `mcp_server.py` /
+  `runs.py` so a run started with `CLEAVE_RUN_ID` set uses it as its run id
+- Spec: `tests/test_runner.py` (client against a mock web app, the `bob run` command,
+  checkout with the job's config, failure and cancel paths). Needs task07's `bob_config/`.
+- Check: `uv run pytest -q -m runner`, then for real: `cleave runner` on your
+  machine, New split → Run on <your runner> on the demo PR.
+- Done when: a run queued in the browser is claimed by your machine, its events appear on
+  the run page while it runs, and "Open the stack" leads to the finished stack.
 
 ### Phase 8 — submission (15:00–18:00)
 

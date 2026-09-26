@@ -33,5 +33,6 @@ testpaths = ["tests"]
 markers = [
   "integration: needs a local clone of the Galaxium fork (set GALAXIUM_REPO)",
   "bob: needs real Bob hook payloads in tests/payloads (open check C1)",
+  "runner: Phase 7 (P1) runner specs, run with -m runner",
 ]
 addopts = "-ra"
