@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="asset/icons/logo.svg" alt="Cleave Logo" width="80" height="80" onerror="this.style.display='none'"/>
+  <img src="asset/icons/logo.svg" alt="Cleave Logo" width="80" height="80" />
 </p>
 
 <h1 align="center">Cleave</h1>
