@@ -3,8 +3,14 @@ export const site = {
   tagline: "Large pull requests, reviewed as small proven steps.",
   description:
     "Cleave turns an oversized pull request into a stack of small ones. Every layer passes your tests on its own, and the stack matches the original change byte for byte.",
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
-  githubUrl: process.env.NEXT_PUBLIC_GITHUB_URL || null,
+  url:
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    (process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.NEXT_PUBLIC_VERCEL_URL
+        ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
+        : "http://localhost:3000"),
+  githubUrl: process.env.NEXT_PUBLIC_GITHUB_URL ?? "https://github.com/edish-github/Cleave",
 };
 
 export const routes = {
