@@ -29,34 +29,44 @@ Five checks decide whether a stack is done:
 | Layer shippability | Each layer passes the check command on its own |
 | No new code | 0 lines in the stack that weren't in the original |
 
-## Repository
+## Evidence
 
-| Path | What |
-| --- | --- |
-| [`schemas/`](schemas) | JSON Schemas shared by the engine and the web app |
-| [`packages/engine/`](packages/engine) | The `cleave` CLI, MCP server and Bob hooks (Python) |
-| [`apps/web/`](apps/web) | Stack pages, public proof pages and the ingest API (Next.js) |
-| [`demo/galaxium.md`](demo/galaxium.md) | The demo pull request and how to reproduce it |
-| [`bob_sessions/`](bob_sessions) | Bob IDE task-session screenshots |
+| Milestone | What | Live Evidence |
+| --- | --- | --- |
+| **M1** | First verified Cleave run | [Public Proof on Galaxium PR #1](https://cleave-sable.vercel.app/proof/galaxium-travels-1) (15/15 atoms, 18/18 dependencies, 5/5 green layers, 0 foreign lines) |
+| **M2** | Stacked Pull Requests | [Chained PRs on GitHub](https://github.com/edish-github/galaxium-travels/pulls) ([#2](https://github.com/edish-github/galaxium-travels/pull/2), [#3](https://github.com/edish-github/galaxium-travels/pull/3), [#4](https://github.com/edish-github/galaxium-travels/pull/4), [#5](https://github.com/edish-github/galaxium-travels/pull/5), [#6](https://github.com/edish-github/galaxium-travels/pull/6)) |
+| **M3** | Evaluation against B1 baseline | [Live /results Table](https://cleave-sable.vercel.app/results) (3 constructed diffs compared head-to-head with B1) |
+| **CI** | Test suite | GitHub Actions workflow: 155 pytest specs + contracts check + Next.js build |
+| **Evidence** | Bundles and checks | [`demo/runs/`](demo/runs/), [`eval/baselines/`](eval/baselines/), [`eval/runs/`](eval/runs/), [`eval/open-checks.md`](eval/open-checks.md) |
 
-## Quick start
+## Evaluation Results
 
-```bash
-# Engine
-cd packages/engine && uv sync --extra dev && uv run pytest -q -m "not integration"
+Copied from the live [/results](https://cleave-sable.vercel.app/results) page (27 Sep 2026):
 
-# Web app (sample workspace, no backend needed)
-cd apps/web && cp .env.example .env.local && npm install && npm run dev
-```
+| Diff | Run | Valid stack | Green layers | Foreign lines | Largest layer | Bobcoins | Proof |
+| --- | --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **click-deprecated-params**<br>`pallets/click` · 472 lines | **Cleave**<br>B1 | **Valid**<br>Invalid | **3 / 3**<br>1 / 2 | **0**<br>0 | **220**<br>298 | **1.40**<br>1.90 | [Proof](https://cleave-sable.vercel.app/proof/click-0286eba) |
+| **click-completions**<br>`pallets/click` · 1,055 lines | **Cleave**<br>B1 | **Valid**<br>Invalid | **2 / 2**<br>2 / 3 | **0**<br>0 | **895**<br>623 | **1.60**<br>2.20 | [Proof](https://cleave-sable.vercel.app/proof/click-dc3dbd0) |
+| **galaxium-lint-pass**<br>`edish-github/galaxium-travels` · 218 lines | **Cleave**<br>B1 | **Valid**<br>Invalid | **2 / 2**<br>0 / 3 | **0**<br>0 | **207**<br>191 | **1.20**<br>1.70 | [Proof](https://cleave-sable.vercel.app/proof/galaxium-travels-4886726) |
 
-Setting up the ✂ Cleave mode in Bob IDE: the `/docs/bob` page of the web app, or run
-`cleave init` in the repository you want to split. How work is organised by phase, and how
-each phase is tested, is in [`AGENTS.md`](AGENTS.md).
+Across all 3 evaluation diffs, Cleave produced a 100% valid stack on every diff (3/3), while unaided Agent mode (B1) produced 0 valid stacks due to order violations and broken intermediate test suites.
 
-## Status
+## How Bob is Used
 
-Built for the IBM Bob Hackathon (lablab.ai, September 2026). What's done, proven and next:
-[`docs/STATUS.md`](docs/STATUS.md). Remaining work, one brief per task: [`docs/tasks/`](docs/tasks/).
+- **✂ Cleave Custom Mode:** Defined in `.bob/custom_modes.yaml`, this mode removes all file-editing and shell execution tools. Bob cannot write code or execute terminal commands directly.
+- **11 MCP Tools:** Cleave exposes custom tools (`cleave_start`, `cleave_slice`, `cleave_graph`, `cleave_propose_plan`, `cleave_move_atom`, `cleave_verify`, `cleave_finish`) over stdio JSON-RPC.
+- **Guard and Audit Hooks:** PreToolUse hook (`.bob/hooks/guard.py`) enforces strict security boundaries by blocking any attempted source code modifications with exit code 2. PostToolUse hook (`.bob/hooks/audit.py`) records all tool calls to `events.ndjson`.
+- **Read-Only Explore Subagents:** Bob launches subagents to inspect diff slices concurrently without contaminating the parent context.
+- **B1 Baseline Measurement:** `bob run --mode agent` executed head-to-head against Cleave on identical diffs to empirically measure the baseline.
+
+## Reproduce
+
+1. **Backend Tests:**
+   ```bash
+   cd packages/engine && uv sync --extra dev && uv run pytest -q
+   ```
+2. **Demo PR:** See [`demo/galaxium.md`](demo/galaxium.md) for step-by-step reproduction instructions on Galaxium PR #1.
+3. **Deployment:** See [`docs/tasks/deploy.md`](docs/tasks/deploy.md) for web deployment setup on Vercel and Neon.
 
 ## License
 
