@@ -24,7 +24,7 @@ OAuth app or `CLEAVE_DEV_LOGIN=1` (development builds only), then `npm run db:mi
 | --- | --- |
 | `npm run dev` / `build` / `start` | Next.js |
 | `npm run lint` / `typecheck` | ESLint 9, `next typegen && tsc --noEmit` |
-| `npm run contracts` | Regenerate `src/lib/contracts.ts` and the server's schema copy from `/schemas` |
+| `npm run contracts` | Regenerate `src/lib/contracts.ts` and the server's schema copy from `/schemas`, and `src/content/bob.generated.ts` from the engine's shipped Bob config |
 | `npm run contracts:check` | Fail if they're out of date (CI) |
 | `npm run db:generate` | New migration from `src/server/db/schema.ts` into `drizzle/` |
 | `npm run db:migrate` | Apply migrations to `DATABASE_URL` |

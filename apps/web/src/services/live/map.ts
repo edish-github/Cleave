@@ -187,17 +187,30 @@ function toIssue(report: C.Report): VerificationIssue | null {
   };
 }
 
-export function toBob(report: C.Report): BobRunStats {
+/**
+ * Bob's numbers for a run. What Bob reported wins; counts it didn't report are taken from
+ * the run's own events (tool calls the hooks saw, cleave_* calls, subagents), and the
+ * duration from the report's timestamps. Nothing is estimated.
+ */
+export function toBob(report: C.Report, counts: Record<string, number> = {}): BobRunStats {
   const bob = report.bob;
+  const counted = (type: string) => (counts[type] ? counts[type] : null);
+  const hookCalls = (counts["hook.allowed"] ?? 0) + (counts["hook.blocked"] ?? 0);
+  const ranMs = report.finished_at ? new Date(report.finished_at).getTime() - new Date(report.started_at).getTime() : null;
   return {
     surface: bob?.surface === "bob_run" ? "bob run" : "Bob IDE",
     mode: bob?.mode ?? "✂ Cleave",
     bobcoins: bob?.bobcoins ?? null,
     tokens: bob?.tokens ?? null,
-    toolCalls: bob?.tool_calls ?? null,
-    mcpCalls: bob?.mcp_calls ?? null,
-    subagents: bob?.subagents ?? null,
-    durationSec: bob?.duration_ms === null || bob?.duration_ms === undefined ? null : Math.round(bob.duration_ms / 1000),
+    toolCalls: bob?.tool_calls ?? (hookCalls || null),
+    mcpCalls: bob?.mcp_calls ?? counted("mcp.called"),
+    subagents: bob?.subagents ?? counted("subagent.spawned"),
+    durationSec:
+      bob?.duration_ms !== null && bob?.duration_ms !== undefined
+        ? Math.round(bob.duration_ms / 1000)
+        : ranMs !== null && ranMs >= 0
+          ? Math.round(ranMs / 1000)
+          : null,
     hookAllowed: report.hook.allowed,
     hookBlocked: report.hook.blocked,
   };
@@ -242,9 +255,11 @@ export interface StackRows {
   atoms: AtomRow[];
   layers: LayerRow[];
   labels: C.Plan["labels"];
+  /** Number of the run's events per type, for stats Bob didn't report. */
+  eventCounts?: Record<string, number>;
 }
 
-export function toStack({ stack, repo, run, atoms, layers, labels }: StackRows): Stack {
+export function toStack({ stack, repo, run, atoms, layers, labels, eventCounts }: StackRows): Stack {
   const [, repoName = repo.fullName] = repo.fullName.split("/");
   const report = run?.report;
   const graph = run?.graph ?? { version: 1 as const, edges: [], groups: [] };
@@ -280,7 +295,7 @@ export function toStack({ stack, repo, run, atoms, layers, labels }: StackRows):
       issue: report ? toIssue(report) : null,
     },
     bob: report
-      ? toBob(report)
+      ? toBob(report, eventCounts)
       : { surface: "Bob IDE", mode: "✂ Cleave", bobcoins: null, tokens: null, toolCalls: null, mcpCalls: null, subagents: null, durationSec: null, hookAllowed: 0, hookBlocked: 0 },
     createdAt: stack.createdAt.toISOString(),
     updatedAt: stack.updatedAt.toISOString(),
@@ -336,6 +351,7 @@ function describeEvent(type: string, p: Payload, tool: string | null): { title: 
     case "run.started":
       return { title: "Cleave run started", detail: str(p, "head_branch") ?? str(p, "head") ?? "Splitting the change", tone: "accent" };
     case "run.finished":
+    case "run.completed":
       return { title: "Run finished", detail: str(p, "status") ?? "", tone: str(p, "status") === "verified" ? "ok" : "neutral" };
     case "atoms.cut":
       return { title: "Change cut into atoms", detail: `${plural(num(p, "atoms"), "atom")} from ${plural(num(p, "files"), "file")}`, tone: "neutral" };
@@ -389,6 +405,26 @@ function describeEvent(type: string, p: Payload, tool: string | null): { title: 
   }
 }
 
+/** One line for a cleave_* call, from its arguments. */
+function callSummary(tool: string | null, a: Payload): string {
+  switch (tool) {
+    case "cleave_start":
+      return str(a, "head") && str(a, "base") ? `${str(a, "head")} onto ${str(a, "base")}` : "";
+    case "cleave_propose_plan":
+      return Array.isArray(a.layers) ? plural(a.layers.length, "layer") : "";
+    case "cleave_move_atoms":
+      return str(a, "reason") ?? (Array.isArray(a.ids) ? `${plural(a.ids.length, "atom")} to layer ${num(a, "to_layer") ?? ""}` : "");
+    case "cleave_describe_layer":
+      return num(a, "n") !== null ? `Layer ${pad2(num(a, "n")!)}: ${str(a, "title") ?? ""}` : "";
+    case "cleave_read_log":
+      return num(a, "layer") !== null ? `Layer ${pad2(num(a, "layer")!)}, round ${num(a, "round") ?? "latest"}` : "";
+    case "cleave_verify_status":
+      return num(a, "round") !== null ? `Round ${num(a, "round")}` : "";
+    default:
+      return "";
+  }
+}
+
 function fieldsOf(p: Payload): { label: string; value: string }[] {
   return Object.entries(p)
     .filter(([k, v]) => !["title", "detail", "code", "tone"].includes(k) && v !== null && ["string", "number", "boolean"].includes(typeof v))
@@ -397,20 +433,34 @@ function fieldsOf(p: Payload): { label: string; value: string }[] {
 }
 
 export function toActivity(row: Pick<EventRow, "id" | "ts" | "source" | "type" | "tool" | "payload">, stackId: string): ActivityEvent {
-  const p = row.payload ?? {};
+  const raw = row.payload ?? {};
+  // mcp.called payloads are Bob's tool arguments (older engines put them at the top level):
+  // show them as fields, never as the event's title or detail.
+  const isCall = row.type === "mcp.called";
+  // For these types a payload `title` is data (the layer's title), not the event's heading.
+  const titleIsData = row.type === "layer.described";
+  const args = isCall ? ((typeof raw.arguments === "object" && raw.arguments ? raw.arguments : raw) as Payload) : null;
+  const p: Payload = isCall ? { summary: callSummary(row.tool, args ?? {}) } : raw;
   const described = describeEvent(row.type, p, row.tool);
   const tone = ["neutral", "ok", "attention", "accent"].includes(String(p.tone)) ? (p.tone as ActivityTone) : described.tone;
-  const code = typeof p.code === "string" ? p.code : typeof p.plan === "object" && p.plan ? JSON.stringify(p.plan, null, 2) : null;
+  const code =
+    typeof p.code === "string"
+      ? p.code
+      : typeof p.plan === "object" && p.plan
+        ? JSON.stringify(p.plan, null, 2)
+        : args && Array.isArray(args.layers)
+          ? JSON.stringify({ layers: args.layers }, null, 2)
+          : null;
   return {
     id: String(row.id),
     stackId,
-    title: str(p, "title") ?? described.title,
-    detail: str(p, "detail") ?? described.detail,
+    title: (!titleIsData && str(p, "title")) || described.title,
+    detail: (!titleIsData && str(p, "detail")) || described.detail,
     at: row.ts.toISOString(),
     source: sourceOf[row.source],
     tone,
     tool: row.tool,
-    fields: fieldsOf(p),
+    fields: fieldsOf(args ?? p),
     code,
   };
 }

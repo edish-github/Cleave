@@ -86,6 +86,8 @@ export default function BobDocsPage() {
                 </li>
               ))}
             </ul>
+            <p>The mode follows a fixed procedure, shipped as its rules:</p>
+            <CodeBlock title={bobFiles.procedure.path} code={bobFiles.procedure.code} wrap />
           </Step>
 
           <Step id="tools" n={3} title="Cleave tools: Bob's only write surface">
@@ -95,6 +97,11 @@ export default function BobDocsPage() {
               existing hunks.
             </p>
             <CodeBlock title={bobFiles.mcp.path} code={bobFiles.mcp.code} />
+            <p className="text-[14px] text-ink-3">
+              In your repository, <code>cleave init</code> writes the full path of <code>cleave</code> and{" "}
+              <code>mcp --repo &lt;repository&gt;</code> into this entry, because Bob may start MCP servers outside the repository
+              and without your shell&apos;s <code>PATH</code>.
+            </p>
             <div className="overflow-hidden rounded-2xl border border-line bg-surface">
               <table className="w-full text-left text-[13px]">
                 <thead className="border-b border-line bg-canvas/60 text-ink-3">

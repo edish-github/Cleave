@@ -1,61 +1,15 @@
-/**
- * The Bob configuration Cleave ships (packages/engine/src/cleave/bob_config/).
- *
- * Kept here so /docs/bob and Settings render the same text. When the engine
- * package lands in this repo, replace these strings with a build-time read of
- * those files so the page can never drift from what `cleave init` installs.
- */
+import { shippedBobConfig } from "./bob.generated";
 
+/**
+ * The Bob configuration Cleave ships (packages/engine/src/cleave/bob_config/), read from
+ * those files by `npm run contracts`, so /docs/bob can't drift from what `cleave init`
+ * installs. `contracts:check` fails in CI when they differ.
+ */
 export const bobFiles = {
-  mode: {
-    path: ".bob/custom_modes.yaml",
-    language: "yaml",
-    code: `customModes:
-  - slug: cleave
-    name: ✂ Cleave
-    description: Split a large diff into a proven stack. Never writes code.
-    roleDefinition: >-
-      You split an existing diff into an ordered stack of layers. You only group
-      and order the atoms Cleave gives you. You never write or edit code.
-    whenToUse: A branch or PR is too large to review as one change.
-    customInstructions: Follow .bob/rules-cleave/. Change the plan only with cleave_* tools.
-    groups: [read, mcp, subagent, todo]
-    allowedSubagents: [explore]              # read-only subagents`,
-  },
-  mcp: {
-    path: ".bob/mcp.json",
-    language: "json",
-    code: `{
-  "mcpServers": {
-    "cleave": {
-      "command": "cleave",
-      "args": ["mcp"],
-      "alwaysAllow": [
-        "cleave_start", "cleave_status", "cleave_atoms", "cleave_graph",
-        "cleave_propose_plan", "cleave_move_atoms", "cleave_verify",
-        "cleave_verify_status", "cleave_read_log", "cleave_describe_layer",
-        "cleave_finish"
-      ]
-    }
-  }
-}`,
-  },
-  // No "matcher": in Bob it's a regex on the tool name, and the guard must see every tool.
-  // cleave init appends these entries to a repository's existing hooks instead of replacing them.
-  hooks: {
-    path: ".bob/settings.json",
-    language: "json",
-    code: `{
-  "hooks": {
-    "PreToolUse": [
-      { "hooks": [{ "type": "command", "command": "python3 .bob/hooks/guard.py", "timeout": 10 }] }
-    ],
-    "PostToolUse": [
-      { "hooks": [{ "type": "command", "command": "python3 .bob/hooks/audit.py", "timeout": 10 }] }
-    ]
-  }
-}`,
-  },
+  mode: { path: ".bob/custom_modes.yaml", language: "yaml", code: shippedBobConfig["custom_modes.yaml"] },
+  mcp: { path: ".bob/mcp.json", language: "json", code: shippedBobConfig["mcp.json"] },
+  hooks: { path: ".bob/settings.json", language: "json", code: shippedBobConfig["settings.json"] },
+  procedure: { path: ".bob/rules-cleave/01-procedure.md", language: "markdown", code: shippedBobConfig["rules-cleave/01-procedure.md"] },
 } as const;
 
 export const mcpTools: { name: string; does: string; writes: string }[] = [

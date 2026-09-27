@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { cache } from "react";
 import type * as C from "@/lib/contracts";
 import type {
@@ -143,8 +143,18 @@ export const loadStack = cache(async (stackId: string, userId: string | null): P
         db().select().from(schema.layers).where(eq(schema.layers.runId, run.id)).orderBy(asc(schema.layers.index)),
       ])
     : [[], []];
-  const labels = run ? await labelsOf(run.id, run.report.plan_version) : null;
-  return toStack({ stack: found.stack, repo: found.repo, run: run ?? null, atoms, layers, labels });
+  const [labels, counts] = run
+    ? await Promise.all([
+        labelsOf(run.id, run.report.plan_version),
+        db()
+          .select({ type: schema.events.type, n: count() })
+          .from(schema.events)
+          .where(eq(schema.events.runId, run.id))
+          .groupBy(schema.events.type),
+      ])
+    : [null, []];
+  const eventCounts = Object.fromEntries(counts.map((c) => [c.type, Number(c.n)]));
+  return toStack({ stack: found.stack, repo: found.repo, run: run ?? null, atoms, layers, labels, eventCounts });
 });
 
 export class NeedsGitHubError extends Error {}

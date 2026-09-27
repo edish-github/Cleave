@@ -1,5 +1,6 @@
 /**
- * Generates src/lib/contracts.ts from /schemas (the engine <-> web contract).
+ * Generates src/lib/contracts.ts from /schemas (the engine <-> web contract), and
+ * src/content/bob.generated.ts from the engine's shipped Bob config.
  *
  *   npm run contracts          write the file
  *   npm run contracts:check    fail if the committed file is out of date (CI)
@@ -44,9 +45,20 @@ for (const file of files) {
 }
 const schemasTs = `/* GENERATED from /schemas by \`npm run contracts\`. Do not edit by hand. */\n\nexport const schemas = {\n${inlined.join("\n")}\n} as const;\n`;
 
+// The Bob config the engine ships, so /docs/bob shows exactly what `cleave init` installs.
+const bobConfig = path.resolve(here, "../../../packages/engine/src/cleave/bob_config");
+const bobOut = path.resolve(here, "../src/content/bob.generated.ts");
+const bobFiles = ["custom_modes.yaml", "mcp.json", "settings.json", "rules-cleave/01-procedure.md"];
+const bobEntries = [];
+for (const file of bobFiles) {
+  bobEntries.push(`  ${JSON.stringify(file)}: ${JSON.stringify((await readFile(path.join(bobConfig, file), "utf8")).trimEnd())},`);
+}
+const bobTs = `/* GENERATED from packages/engine/src/cleave/bob_config by \`npm run contracts\`. Do not edit by hand. */\n\nexport const shippedBobConfig = {\n${bobEntries.join("\n")}\n} as const;\n`;
+
 const outputs = [
   [out, ts],
   [schemasOut, schemasTs],
+  [bobOut, bobTs],
 ];
 
 if (process.argv.includes("--check")) {
