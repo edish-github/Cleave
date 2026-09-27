@@ -45,21 +45,22 @@ def rev_parse(repo: Path, ref: str) -> str:
     return git(repo, "rev-parse", ref).strip()
 
 
+def merge_base(repo: Path, a: str, b: str) -> str:
+    """The commit a pull request from ``b`` into ``a`` is diffed against (GitHub's three-dot diff)."""
+    return git(repo, "merge-base", a, b).strip()
+
+
 def tree_of(repo: Path, commit: str) -> str:
     """Tree sha of a commit (``<commit>^{tree}``)."""
     return git(repo, "rev-parse", f"{commit}^{{tree}}").strip()
 
 
 def is_clean(repo: Path) -> bool:
-    """True when the working tree has no uncommitted changes. atomize refuses a dirty tree."""
+    """True when the working tree has no uncommitted changes outside .bob/ and .cleave/. atomize refuses a dirty tree."""
     out = git(repo, "status", "--porcelain", "--untracked-files=all")
-    lines = [
-        line
-        for line in out.splitlines()
-        if line.strip()
-        and not (line[3:].startswith(".cleave") or line[3:].startswith(".bob") or line[3:] == ".gitignore")
-    ]
-    return len(lines) == 0
+    # Cleave's own files (the mode in .bob/, runs in .cleave/) never make the tree dirty.
+    changed = [line[3:].strip('"') for line in out.splitlines() if line.strip()]
+    return all(path.startswith((".bob/", ".cleave/")) for path in changed)
 
 
 def diff(repo: Path, base: str, head: str) -> str:

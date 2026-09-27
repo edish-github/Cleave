@@ -9,7 +9,6 @@ Spec: tests/test_plan.py.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from .models import AtomsFile, Graph, Label, Plan, PlanLayer, Violation, dump
 from .runs import RunDir

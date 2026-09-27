@@ -10,6 +10,7 @@ Spec: tests/test_mcp.py. The names below must match bob_config/mcp.json ``always
 from __future__ import annotations
 
 import json
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -17,7 +18,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from .atomize import atomize
-from .build import build_stack, prefix_trees
+from .build import build_stack, foreign_lines, prefix_trees, slugify
 from .config import load_config
 from .events import EventLog
 from .graph import build_graph
@@ -36,6 +37,7 @@ from .report import make_report, write_report
 from .runs import RunDir, active_run, new_run_id, set_active
 from .slices import write_slices
 from .verify import verify
+from .gitio import GitError, merge_base, rev_parse
 
 TOOL_NAMES: tuple[str, ...] = (
     "cleave_start",
@@ -55,34 +57,87 @@ VERIFY_PENDING_AFTER_S = 50
 """MCP calls time out after about a minute in Bob; a longer verify returns ``pending``."""
 
 
+def _resolve(repo: Path, ref: str) -> str:
+    """A ref as given, else ``origin/<ref>`` (a branch that was fetched but never checked out)."""
+    for candidate in (ref, f"origin/{ref}"):
+        try:
+            return rev_parse(repo, candidate)
+        except GitError:
+            continue
+    raise ValueError(f"Can't find {ref!r} in {repo}. Fetch it first: git fetch origin {ref}")
+
+
+def _slug(events: list[Any], run_id: str) -> str:
+    """Branch prefix: the head branch the run was started with, else the run id."""
+    started = next((e for e in events if e.type == "run.started"), None)
+    head = (started.payload.get("head_branch") if started else None) or ""
+    return slugify(head.split("/")[-1] if head and not _looks_like_sha(head) else run_id)
+
+
+def _looks_like_sha(ref: str) -> bool:
+    return len(ref) >= 7 and all(c in "0123456789abcdef" for c in ref.lower())
+
+
+def repo_root(path: Path) -> Path:
+    """The git top level containing ``path`` (Bob may start the server in a subdirectory)."""
+    try:
+        from .gitio import git
+
+        return Path(git(path, "rev-parse", "--show-toplevel"))
+    except Exception:
+        return path
+
+
 def create_server(repo: Path) -> FastMCP:
     """Return a FastMCP server bound to ``repo`` with exactly the tools in ``TOOL_NAMES``."""
     server = FastMCP("cleave")
+    pending: dict[tuple[str, int], threading.Thread] = {}
+    rounds_lock = threading.Lock()
+
+    def _round_result(run: RunDir, round_num: int) -> dict[str, Any]:
+        """The round's result once it's written to rounds.json, else ``pending``."""
+        rounds_file = run.path / "rounds.json"
+        rounds = [Round.model_validate(r) for r in json.loads(rounds_file.read_text())] if rounds_file.exists() else []
+        found = next((r for r in rounds if r.round == round_num), None)
+        if found is None:
+            return {"round": round_num, "status": "pending", "layers": [], "top_tree_matches": False}
+        pending.pop((run.run_id, round_num), None)
+        atoms = AtomsFile.model_validate_json(run.atoms.read_text())
+        plan = Plan.model_validate_json(run.plan(found.plan_version).read_text())
+        trees = prefix_trees(repo, atoms, plan)
+        return {
+            "round": found.round,
+            "status": "pass" if all(r.status == "pass" for r in found.results) else "fail",
+            "layers": [dump(r) for r in found.results],
+            "top_tree_matches": bool(trees and trees[-1] == atoms.head_tree),
+        }
 
     @server.tool(
         name="cleave_start",
         description="Atomize diff, build dependency graph, write explore slices and initialize a new Cleave run.",
     )
     def cleave_start(base: str, head: str) -> dict[str, Any]:
+        # Everything that can refuse (dirty tree, unknown refs) runs before the run exists,
+        # so a failed start never leaves .cleave/active behind to lock the repository.
+        # Like a pull request: split what head adds on top of where it branched from base,
+        # so commits that landed on base afterwards never show up as reverted changes.
+        head_ref = _resolve(repo, head)
+        base_ref = merge_base(repo, _resolve(repo, base), head_ref)
+        atoms = atomize(repo, base_ref, head_ref)
+        graph = build_graph(repo, atoms)
+
         run_id = new_run_id()
         run = RunDir(repo, run_id).create()
-        set_active(repo, run_id)
-
-        atoms = atomize(repo, base, head)
-        run.atoms.write_text(json.dumps(dump(atoms), indent=2))
-
-        graph = build_graph(repo, atoms)
-        run.graph.write_text(json.dumps(dump(graph), indent=2))
-
-        slices = write_slices(run, atoms, graph)
-
         log = EventLog(run.events, run_id)
-        log.emit(
-            source="mcp",
-            type_="mcp.called",
-            tool="cleave_start",
-            payload={"base": base, "head": head, "atoms": len(atoms.atoms)},
-        )
+        log.emit(source="mcp", type_="mcp.called", tool="cleave_start", payload={"arguments": {"base": base, "head": head}})
+        log.emit(source="engine", type_="run.started", payload={"base": base, "head": head, "head_branch": head})
+        run.atoms.write_text(json.dumps(dump(atoms), indent=2))
+        log.emit(source="engine", type_="atoms.cut", payload={"atoms": len(atoms.atoms), "files": len({a.file for a in atoms.atoms})})
+        run.graph.write_text(json.dumps(dump(graph), indent=2))
+        log.emit(source="engine", type_="graph.built", payload={"edges": len(graph.edges), "groups": len(graph.groups)})
+        slices = write_slices(run, atoms, graph)
+        log.emit(source="engine", type_="slices.written", payload={"slices": len(slices)})
+        set_active(repo, run_id)
 
         return {
             "run_id": run_id,
@@ -107,7 +162,7 @@ def create_server(repo: Path) -> FastMCP:
             }
 
         log = EventLog(run.events, run.run_id)
-        log.emit(source="mcp", type_="mcp.called", tool="cleave_status", payload={})
+        log.emit(source="mcp", type_="mcp.called", tool="cleave_status", payload={"arguments": {}})
 
         atom_count = 0
         if run.atoms.exists():
@@ -144,7 +199,7 @@ def create_server(repo: Path) -> FastMCP:
             raise ValueError("No active run found")
 
         log = EventLog(run.events, run.run_id)
-        log.emit(source="mcp", type_="mcp.called", tool="cleave_atoms", payload={"slice": slice})
+        log.emit(source="mcp", type_="mcp.called", tool="cleave_atoms", payload={"arguments": {"slice": slice}})
 
         atoms = AtomsFile.model_validate_json(run.atoms.read_text())
         selected = atoms.atoms
@@ -179,7 +234,7 @@ def create_server(repo: Path) -> FastMCP:
             raise ValueError("No active run found")
 
         log = EventLog(run.events, run.run_id)
-        log.emit(source="mcp", type_="mcp.called", tool="cleave_graph", payload={"atom_id": atom_id})
+        log.emit(source="mcp", type_="mcp.called", tool="cleave_graph", payload={"arguments": {"atom_id": atom_id}})
 
         graph = Graph.model_validate_json(run.graph.read_text())
         if atom_id:
@@ -201,7 +256,7 @@ def create_server(repo: Path) -> FastMCP:
             raise ValueError("No active run found")
 
         log = EventLog(run.events, run.run_id)
-        log.emit(source="mcp", type_="mcp.called", tool="cleave_propose_plan", payload={"layers": layers})
+        log.emit(source="mcp", type_="mcp.called", tool="cleave_propose_plan", payload={"arguments": {"layers": layers}})
 
         atoms = AtomsFile.model_validate_json(run.atoms.read_text())
         graph = Graph.model_validate_json(run.graph.read_text())
@@ -221,6 +276,11 @@ def create_server(repo: Path) -> FastMCP:
                     parsed_labels[k] = Label(concern=v, intent="")
 
         plan = store.propose(plan_layers, labels=parsed_labels, author="bob")
+        log.emit(
+            source="engine",
+            type_="plan.proposed",
+            payload={"version": plan.version, "layers": len(plan.layers), "violations": len(plan.violations)},
+        )
         return {"version": plan.version, "violations": [dump(v) for v in plan.violations]}
 
     @server.tool(
@@ -237,7 +297,7 @@ def create_server(repo: Path) -> FastMCP:
             source="mcp",
             type_="mcp.called",
             tool="cleave_move_atoms",
-            payload={"ids": ids, "to_layer": to_layer, "reason": reason},
+            payload={"arguments": {"ids": ids, "to_layer": to_layer, "reason": reason}},
         )
 
         atoms = AtomsFile.model_validate_json(run.atoms.read_text())
@@ -246,6 +306,11 @@ def create_server(repo: Path) -> FastMCP:
         store = PlanStore(run, atoms, graph, max_layer_lines=config.max_layer_lines)
 
         plan = store.move_atoms(ids, to_layer, reason)
+        log.emit(
+            source="engine",
+            type_="atoms.moved",
+            payload={"atoms": ids, "to_layer": to_layer, "reason": reason, "version": plan.version},
+        )
         return {"version": plan.version, "violations": [dump(v) for v in plan.violations]}
 
     @server.tool(
@@ -258,7 +323,7 @@ def create_server(repo: Path) -> FastMCP:
             raise ValueError("No active run found")
 
         log = EventLog(run.events, run.run_id)
-        log.emit(source="mcp", type_="mcp.called", tool="cleave_verify", payload={})
+        log.emit(source="mcp", type_="mcp.called", tool="cleave_verify", payload={"arguments": {}})
 
         atoms = AtomsFile.model_validate_json(run.atoms.read_text())
         config = load_config(repo)
@@ -268,30 +333,23 @@ def create_server(repo: Path) -> FastMCP:
         plan = Plan.model_validate_json(run.plan(versions[-1]).read_text())
 
         rounds_file = run.path / "rounds.json"
-        existing_rounds: list[Round] = []
-        if rounds_file.exists():
-            existing_rounds = [Round.model_validate(r) for r in json.loads(rounds_file.read_text())]
+        done = [Round.model_validate(r) for r in json.loads(rounds_file.read_text())] if rounds_file.exists() else []
+        round_num = len(done) + len([k for k in pending if k[0] == run.run_id]) + 1
 
-        round_num = len(existing_rounds) + 1
-        round_res = verify(
-            repo=repo, atoms=atoms, plan=plan, config=config, run=run, round_=round_num, log=log
-        )
-        existing_rounds.append(round_res)
-        rounds_file.write_text(json.dumps([dump(r) for r in existing_rounds], indent=2))
+        def work() -> None:
+            result = verify(repo=repo, atoms=atoms, plan=plan, config=config, run=run, round_=round_num, log=log)
+            with rounds_lock:
+                current = [Round.model_validate(r) for r in json.loads(rounds_file.read_text())] if rounds_file.exists() else []
+                current.append(result)
+                rounds_file.write_text(json.dumps([dump(r) for r in current], indent=2))
 
-        # Build stack branches cleave/<slug>/...
-        build_stack(repo, atoms, plan, run.run_id)
-
-        trees = prefix_trees(repo, atoms, plan)
-        top_tree_matches = bool(trees and trees[-1] == atoms.head_tree)
-        status = "pass" if all(r.status == "pass" for r in round_res.results) else "fail"
-
-        return {
-            "round": round_num,
-            "status": status,
-            "layers": [dump(r) for r in round_res.results],
-            "top_tree_matches": top_tree_matches,
-        }
+        # Bob's MCP calls time out after about a minute: run the round in the background and
+        # answer "pending" if it isn't done in VERIFY_PENDING_AFTER_S; Bob then polls.
+        thread = threading.Thread(target=work, name=f"cleave-verify-{round_num}", daemon=True)
+        pending[(run.run_id, round_num)] = thread
+        thread.start()
+        thread.join(VERIFY_PENDING_AFTER_S)
+        return _round_result(run, round_num)
 
     @server.tool(
         name="cleave_verify_status",
@@ -303,26 +361,12 @@ def create_server(repo: Path) -> FastMCP:
             raise ValueError("No active run found")
 
         log = EventLog(run.events, run.run_id)
-        log.emit(source="mcp", type_="mcp.called", tool="cleave_verify_status", payload={"round": round})
+        log.emit(source="mcp", type_="mcp.called", tool="cleave_verify_status", payload={"arguments": {"round": round}})
 
-        rounds_file = run.path / "rounds.json"
-        if rounds_file.exists():
-            existing_rounds = [Round.model_validate(r) for r in json.loads(rounds_file.read_text())]
-            target_round = next((r for r in existing_rounds if r.round == round), None)
-            if target_round:
-                atoms = AtomsFile.model_validate_json(run.atoms.read_text())
-                plan = Plan.model_validate_json(run.plan(target_round.plan_version).read_text())
-                trees = prefix_trees(repo, atoms, plan)
-                top_tree_matches = bool(trees and trees[-1] == atoms.head_tree)
-                status = "pass" if all(r.status == "pass" for r in target_round.results) else "fail"
-                return {
-                    "round": target_round.round,
-                    "status": status,
-                    "layers": [dump(r) for r in target_round.results],
-                    "top_tree_matches": top_tree_matches,
-                }
-
-        return {"round": round, "status": "pending", "layers": [], "top_tree_matches": False}
+        thread = pending.get((run.run_id, round))
+        if thread is not None:
+            thread.join(VERIFY_PENDING_AFTER_S)
+        return _round_result(run, round)
 
     @server.tool(
         name="cleave_read_log",
@@ -334,7 +378,7 @@ def create_server(repo: Path) -> FastMCP:
             raise ValueError("No active run found")
 
         log = EventLog(run.events, run.run_id)
-        log.emit(source="mcp", type_="mcp.called", tool="cleave_read_log", payload={"layer": layer, "round": round})
+        log.emit(source="mcp", type_="mcp.called", tool="cleave_read_log", payload={"arguments": {"layer": layer, "round": round}})
 
         rounds_file = run.path / "rounds.json"
         round_num = round
@@ -369,7 +413,7 @@ def create_server(repo: Path) -> FastMCP:
             source="mcp",
             type_="mcp.called",
             tool="cleave_describe_layer",
-            payload={"n": n, "title": title, "body": body},
+            payload={"arguments": {"n": n, "title": title, "body": body}},
         )
 
         desc_path = run.path / "descriptions.json"
@@ -382,6 +426,7 @@ def create_server(repo: Path) -> FastMCP:
 
         descriptions[str(n)] = {"title": title, "body": body}
         desc_path.write_text(json.dumps(descriptions, indent=2))
+        log.emit(source="engine", type_="layer.described", payload={"layer": n, "title": title})
         return {"ok": True}
 
     @server.tool(
@@ -394,7 +439,7 @@ def create_server(repo: Path) -> FastMCP:
             raise ValueError("No active run found")
 
         log = EventLog(run.events, run.run_id)
-        log.emit(source="mcp", type_="mcp.called", tool="cleave_finish", payload={})
+        log.emit(source="mcp", type_="mcp.called", tool="cleave_finish", payload={"arguments": {}})
 
         atoms = AtomsFile.model_validate_json(run.atoms.read_text())
         graph = Graph.model_validate_json(run.graph.read_text())
@@ -424,11 +469,11 @@ def create_server(repo: Path) -> FastMCP:
         if rounds_file.exists():
             rounds = [Round.model_validate(r) for r in json.loads(rounds_file.read_text())]
 
-        built = build_stack(repo, atoms, plan, run.run_id)
+        events = log.read()
+        built = build_stack(repo, atoms, plan, _slug(events, run.run_id))
         trees = prefix_trees(repo, atoms, plan)
         top_tree = trees[-1] if trees else None
 
-        events = log.read()
         hook_allowed = sum(1 for e in events if e.type == "hook.allowed")
         hook_blocked = sum(1 for e in events if e.type == "hook.blocked")
         hook_counts = HookCounts(allowed=hook_allowed, blocked=hook_blocked)
@@ -445,7 +490,7 @@ def create_server(repo: Path) -> FastMCP:
             config=config,
             built=built,
             top_tree=top_tree,
-            foreign_lines=0,
+            foreign_lines=foreign_lines(repo, atoms, top_tree) if top_tree else 0,
             started_at=started_at,
             finished_at=finished_at,
             hook=hook_counts,
@@ -453,14 +498,17 @@ def create_server(repo: Path) -> FastMCP:
         report_path = write_report(run, report)
 
         set_active(repo, None)
-        log.emit(source="mcp", type_="run.completed", payload={"status": report.status, "run_id": run.run_id})
+        log.emit(source="engine", type_="run.finished", payload={"status": report.status, "run_id": run.run_id})
 
         return {"status": report.status, "report_path": str(report_path)}
 
     return server
 
 
-def main(repo_path: Path | None = None) -> None:
-    """Entry point for ``cleave mcp``: serve ``create_server(...)`` over stdio."""
-    target = repo_path.resolve() if repo_path else Path.cwd()
-    create_server(target).run()
+def main(repo: Path | None = None) -> None:
+    """Entry point for ``cleave mcp``: serve the repository over stdio.
+
+    ``cleave mcp --repo <repo>`` (what ``cleave init`` writes into .bob/mcp.json) names it
+    explicitly; otherwise the git top level of the current directory.
+    """
+    create_server(repo_root((repo or Path.cwd()).resolve())).run()
