@@ -11,9 +11,9 @@ export const assets = {
     alt: "Cleave stack overview showing verified layers for a pull request",
   },
   landingBobScreenshot: {
-    src: "https://placehold.co/1200x900/F2F1ED/85858E/png?text=Bob+IDE+%E2%80%94+Cleave+mode%0A1200+%C3%97+900",
-    width: 1200,
-    height: 900,
-    alt: "IBM Bob IDE running the Cleave mode with parallel subagents",
+    src: "/images/landing-bob.png",
+    width: 2940,
+    height: 1912,
+    alt: "IBM Bob IDE running the Cleave mode with parallel subagents and verified layers",
   },
 } as const;
