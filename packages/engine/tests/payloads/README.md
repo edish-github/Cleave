@@ -13,4 +13,4 @@ One JSON file per captured call, named `<event>-<tool>.json`, e.g. `pre-read_fil
 `expect` is what the guard must do while a Cleave run is active: `allow` for reads, todos,
 subagents, questions, completion and `cleave` MCP calls; `block` for writes, commands,
 mode switches and other MCP servers. `uv run pytest -q -m bob` replays every file
-through `bob_config/hooks/guard.py`. How to capture them: `docs/tasks/phase-3/task07a-capture-payloads.md`.
+through `bob_config/hooks/guard.py`. How to get them from a real run: `docs/tasks/phase-3/task08-first-run.md`, step 9.

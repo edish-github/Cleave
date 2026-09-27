@@ -1,56 +1,32 @@
 #!/usr/bin/env python3
-"""Bob PostToolUse audit hook for Cleave mode.
+"""Bob PostToolUse audit hook for the ✂ Cleave mode.
 
-Logs every completed tool call to the active run's events.ndjson as hook.allowed.
-Remains completely silent if no Cleave run is active.
+Appends one hook.allowed event per completed tool call to the active run's
+events.ndjson, with the tool name and the path, command or server it touched (never
+file contents). Silent and a no-op without an active run; always exits 0.
+
+Standard library only, Python 3.9 compatible.
 """
 
 from __future__ import annotations
 
-import json
+import os
 import sys
-from datetime import datetime, timezone
-from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from guard import active_run, log_event, read_payload, repo_root, subject  # noqa: E402
 
 
 def main() -> None:
     try:
-        raw = sys.stdin.read()
-        if not raw.strip():
-            sys.exit(0)
-        data = json.loads(raw)
-    except Exception:
-        sys.exit(0)
-
-    active_marker = Path.cwd() / ".cleave" / "active"
-    if not active_marker.exists():
-        sys.exit(0)
-
-    run_id = active_marker.read_text().strip()
-    if not run_id:
-        sys.exit(0)
-
-    tool = data.get("tool") or data.get("tool_name") or ""
-    args = data.get("input") if "input" in data else data.get("tool_input", {})
-    if not isinstance(args, dict):
-        args = {}
-
-    events_file = Path.cwd() / ".cleave" / "runs" / run_id / "events.ndjson"
-    event = {
-        "ts": datetime.now(timezone.utc).isoformat(),
-        "source": "hook",
-        "type": "hook.allowed",
-        "run_id": run_id,
-        "tool": tool,
-        "payload": args,
-    }
-    try:
-        events_file.parent.mkdir(parents=True, exist_ok=True)
-        with events_file.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(event, separators=(",", ":")) + "\n")
+        tool, args = read_payload()
+        root = repo_root()
+        run_id = active_run(root)
+        if run_id:
+            log_event(root, run_id, "hook.allowed", tool, {"detail": subject(tool, args)})
     except Exception:
         pass
-
     sys.exit(0)
 
 
