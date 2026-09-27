@@ -114,3 +114,11 @@ def test_atomize_accepts_a_tree_changed_only_by_cleave(bob_repo: FixtureRepo) ->
     (bob_repo.path / "app" / "models.py").write_text("# an uncommitted edit\n")
     with pytest.raises(ValueError):
         atomize(bob_repo.path, bob_repo.base, bob_repo.head)
+
+
+def test_a_check_command_with_quotes_round_trips(bob_repo: FixtureRepo) -> None:
+    from cleave.config import load_config
+
+    check = 'python -m pytest -q --deselect "tests/test_utils.py::test_pager[test5]" -k \'not slow\''
+    assert main(["-C", str(bob_repo.path), "init", "--check", check]) == 0
+    assert load_config(bob_repo.path).check_command == check

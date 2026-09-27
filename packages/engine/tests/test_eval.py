@@ -22,7 +22,7 @@ from cleave.models import Check, LayerResult, Report
 
 from .conftest import git
 
-# Phase 6 spec, kept out of the default run (and CI) until its task lands.
+# Phase 6 spec, part of the default run and CI; -m eval runs it alone.
 pytestmark = pytest.mark.eval
 
 NOW = datetime(2026, 9, 27, 12, 0, tzinfo=timezone.utc)
@@ -128,23 +128,24 @@ def _report(layers: list[tuple[list[str], str, int]], *, foreign: int = 0, top_m
     )
 
 
-TRUTH = {"a1": "c1", "a2": "c1", "b1": "c2", "b2": "c2"}
+A1, A2, B1, B2 = "aaaaaaaaaaa1", "aaaaaaaaaaa2", "bbbbbbbbbbb1", "bbbbbbbbbbb2"
+TRUTH = {A1: "c1", A2: "c1", B1: "c2", B2: "c2"}
 
 
 def test_metrics_for_a_stack_that_matches_the_commits() -> None:
-    m = metrics(_report([(["a1", "a2"], "pass", 30), (["b1", "b2"], "pass", 50)]), TRUTH)
+    m = metrics(_report([([A1, A2], "pass", 30), ([B1, B2], "pass", 50)]), TRUTH)
     assert (m.valid, m.green, m.layers, m.foreign_lines, m.largest_layer) == (True, 2, 2, 0, 50)
     assert m.agreement == 1.0
 
 
 def test_agreement_is_the_share_of_atom_pairs_grouped_the_same_way() -> None:
     # One layer for everything: of the 6 atom pairs, the 2 same-commit pairs agree, the 4 others don't.
-    m = metrics(_report([(["a1", "a2", "b1", "b2"], "pass", 80)]), TRUTH)
+    m = metrics(_report([([A1, A2, B1, B2], "pass", 80)]), TRUTH)
     assert m.agreement == pytest.approx(2 / 6)
 
 
 def test_a_red_layer_or_foreign_code_makes_the_stack_invalid() -> None:
-    red = metrics(_report([(["a1", "a2"], "fail", 30), (["b1", "b2"], "pass", 50)]), TRUTH)
+    red = metrics(_report([([A1, A2], "fail", 30), ([B1, B2], "pass", 50)]), TRUTH)
     assert (red.valid, red.green) == (False, 1)
-    foreign = metrics(_report([(["a1", "a2", "b1", "b2"], "pass", 80)], foreign=37, top_matches=False), None)
+    foreign = metrics(_report([([A1, A2, B1, B2], "pass", 80)], foreign=37, top_matches=False), None)
     assert (foreign.valid, foreign.foreign_lines, foreign.agreement) == (False, 37, None)

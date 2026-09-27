@@ -24,10 +24,26 @@ CLEAVE_DIR = Path(".cleave")
 ACTIVE_FILE = CLEAVE_DIR / "active"
 
 
-def new_run_id(now: datetime | None = None) -> str:
+RUN_ID_FILE = CLEAVE_DIR / "run-id"
+"""Written by ``cleave runner`` before it starts Bob: the id the next run must use (the job's)."""
+
+
+def new_run_id(now: datetime | None = None, repo: Path | None = None) -> str:
+    """``$CLEAVE_RUN_ID``, else the id in ``<repo>/.cleave/run-id`` (used once, then removed),
+    else a new timestamped id. The file exists because MCP clients start servers with a
+    filtered environment, so the runner's variable may never reach ``cleave mcp``."""
     env_id = os.environ.get("CLEAVE_RUN_ID")
     if env_id:
         return env_id
+    if repo is not None:
+        marker = repo / RUN_ID_FILE
+        try:
+            file_id = marker.read_text().strip()
+        except OSError:
+            file_id = ""
+        if file_id:
+            marker.unlink(missing_ok=True)
+            return file_id
     now = now or datetime.now(timezone.utc)
     return f"{now:%Y%m%d-%H%M%S}-{secrets.token_hex(3)}"
 

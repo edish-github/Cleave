@@ -54,8 +54,10 @@ def parse_pytest(output: str) -> PytestSummary:
     passed = None
     failed = None
     for line in reversed(lines):
-        line = line.strip()
-        if re.search(r"in\s+[\d\.]+s", line) and line.startswith("="):
+        # `pytest -q` prints the summary bare ("3 failed, 41 passed in 2.1s"); other modes
+        # wrap it in "=" rules. Accept both.
+        line = line.strip().strip("=").strip()
+        if re.search(r"\bin\s+[\d\.]+s\b", line) and re.search(r"\d+\s+(passed|failed|errors?|skipped|deselected)", line):
             p_m = re.search(r"(\d+)\s+passed", line)
             f_m = re.search(r"(\d+)\s+failed", line)
             e_m = re.search(r"(\d+)\s+error", line)
@@ -88,6 +90,103 @@ def excerpt(output: str, limit: int = 4000) -> str:
     return res
 
 
+def check_env(repo: Path, work_dir: Path, config: RunConfig, tmp: Path) -> dict[str, str]:
+    """The environment a check runs in: ours, plus the repository's virtualenv (the
+    worktree's own, else the one in the repository) and a private temp dir."""
+    env = os.environ.copy()
+    env["TMPDIR"] = str(tmp)
+    for candidate in [
+        work_dir / ".venv",
+        repo / (config.working_directory or "") / ".venv",
+        repo / ".venv",
+    ]:
+        if candidate.is_dir() and (candidate / "bin").is_dir():
+            env["VIRTUAL_ENV"] = str(candidate)
+            env["PATH"] = f"{candidate / 'bin'}:{env.get('PATH', '')}"
+            break
+    return env
+
+
+def run_check(repo: Path, commit: str, config: RunConfig, log_file: Path, layer: int = 1) -> CheckResult:
+    """Check out ``commit`` in a temporary worktree, run the setup and check commands in
+    ``working_directory``, save the full log to ``log_file`` and return the result.
+
+    Checks may run at the same time (one per layer), so each gets its own worktree and temp
+    dir, and stdin is closed: under MCP stdio, stdin is Bob's JSON-RPC stream.
+    """
+    with _GIT_LOCK:
+        worktree_dir = Path(tempfile.mkdtemp(prefix=f"cleave_wt_l{layer}_"))
+        add_worktree(repo, worktree_dir, commit)
+    layer_tmp = Path(tempfile.mkdtemp(prefix=f"cleave_tmp_l{layer}_"))
+    try:
+        work_dir = (worktree_dir / config.working_directory) if config.working_directory else worktree_dir
+        timeout = config.timeout_s
+        env = check_env(repo, work_dir, config, layer_tmp)
+
+        def sh(command: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                command,
+                shell=True,
+                cwd=str(work_dir),
+                env=env,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+
+        setup_output = ""
+        start_time = time.time()
+        try:
+            if config.setup_command:
+                sproc = sh(config.setup_command)
+                setup_output = (sproc.stdout or "") + (sproc.stderr or "")
+                # A setup that creates the worktree's own virtualenv: the check runs in it.
+                env.update(check_env(repo, work_dir, config, layer_tmp))
+            cproc = sh(config.check_command)
+            exit_code = cproc.returncode
+            output = (cproc.stdout or "") + (cproc.stderr or "")
+            timed_out = False
+        except subprocess.TimeoutExpired as e:
+            def text(b: bytes | str | None) -> str:
+                return b.decode("utf-8", "replace") if isinstance(b, bytes) else (b or "")
+
+            exit_code = -1
+            output = text(e.stdout) + text(e.stderr) + f"\nTimeout expired after {timeout}s"
+            timed_out = True
+
+        duration_ms = int((time.time() - start_time) * 1000)
+        full_log = (setup_output + "\n" if setup_output else "") + output
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        log_file.write_text(full_log)
+
+        summary = parse_pytest(output)
+        if timed_out:
+            status = "timeout"
+        elif exit_code == 0:
+            status = "pass"
+        elif summary.failed:
+            status = "fail"
+        else:
+            status = "error"
+
+        return CheckResult(
+            layer=layer,
+            status=status,
+            tests_passed=summary.passed,
+            tests_failed=summary.failed,
+            duration_ms=duration_ms,
+            failure=summary.first_failure,
+            log_excerpt=excerpt(full_log),
+        )
+    finally:
+        with _GIT_LOCK:
+            remove_worktree(repo, worktree_dir)
+        if worktree_dir.exists():
+            shutil.rmtree(worktree_dir, ignore_errors=True)
+        shutil.rmtree(layer_tmp, ignore_errors=True)
+
+
 def verify(
     repo: Path,
     atoms: AtomsFile,
@@ -114,117 +213,34 @@ def verify(
     def verify_layer(idx: int, spec: PlanLayer, tree: str) -> CheckResult:
         with _GIT_LOCK:
             commit = commit_tree(repo, tree, atoms.base_sha, f"verification round {round_} layer {idx}")
-            worktree_dir = Path(tempfile.mkdtemp(prefix=f"cleave_wt_r{round_}_l{idx}_"))
-            add_worktree(repo, worktree_dir, commit)
-
-        try:
-            work_dir = (worktree_dir / config.working_directory) if config.working_directory else worktree_dir
-            timeout = getattr(config, "timeout_s", 600)
-
-            run_env = os.environ.copy()
-            for venv_candidate in [
-                work_dir / ".venv",
-                repo / (config.working_directory or "") / ".venv",
-                repo / ".venv",
-            ]:
-                if venv_candidate.is_dir() and (venv_candidate / "bin").is_dir():
-                    run_env["VIRTUAL_ENV"] = str(venv_candidate)
-                    run_env["PATH"] = f"{venv_candidate / 'bin'}:{run_env.get('PATH', '')}"
-                    break
-
-            setup_output = ""
-            if config.setup_command:
-                sproc = subprocess.run(
-                    config.setup_command,
-                    shell=True,
-                    cwd=str(work_dir),
-                    env=run_env,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout,
+        result = run_check(repo, commit, config, run.check_log(round_, idx), layer=idx)
+        if log:
+            if result.status == "pass":
+                log.emit(
+                    "engine",
+                    "layer.passed",
+                    {
+                        "round": round_,
+                        "layer": idx,
+                        "name": spec.name,
+                        "tests_passed": result.tests_passed,
+                        "duration_ms": result.duration_ms,
+                    },
                 )
-                setup_output = (sproc.stdout or "") + (sproc.stderr or "")
-
-            start_time = time.time()
-            try:
-                cproc = subprocess.run(
-                    config.check_command,
-                    shell=True,
-                    cwd=str(work_dir),
-                    env=run_env,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout,
+            else:
+                log.emit(
+                    "engine",
+                    "layer.failed",
+                    {
+                        "round": round_,
+                        "layer": idx,
+                        "name": spec.name,
+                        "status": result.status,
+                        "failure": dump(result.failure) if result.failure else None,
+                        "duration_ms": result.duration_ms,
+                    },
                 )
-                exit_code = cproc.returncode
-                output = (cproc.stdout or "") + (cproc.stderr or "")
-                timed_out = False
-            except subprocess.TimeoutExpired as e:
-                exit_code = -1
-                output = (e.stdout or "") + (e.stderr or "") + f"\nTimeout expired after {timeout}s"
-                timed_out = True
-
-            duration_ms = int((time.time() - start_time) * 1000)
-            full_log = (setup_output + "\n" if setup_output else "") + output
-
-            log_file = run.check_log(round_, idx)
-            log_file.parent.mkdir(parents=True, exist_ok=True)
-            log_file.write_text(full_log)
-
-            summary = parse_pytest(output)
-            if timed_out:
-                status = "timeout"
-            elif exit_code == 0:
-                status = "pass"
-            elif summary.failed:
-                status = "fail"
-            else:
-                status = "error" if exit_code != 0 else "pass"
-
-            result = CheckResult(
-                layer=idx,
-                status=status,
-                tests_passed=summary.passed,
-                tests_failed=summary.failed,
-                duration_ms=duration_ms,
-                failure=summary.first_failure,
-                log_excerpt=excerpt(full_log),
-            )
-
-            if status == "pass":
-                if log:
-                    log.emit(
-                        "engine",
-                        "layer.passed",
-                        {
-                            "round": round_,
-                            "layer": idx,
-                            "name": spec.name,
-                            "tests_passed": summary.passed,
-                            "duration_ms": duration_ms,
-                        },
-                    )
-            else:
-                if log:
-                    log.emit(
-                        "engine",
-                        "layer.failed",
-                        {
-                            "round": round_,
-                            "layer": idx,
-                            "name": spec.name,
-                            "status": status,
-                            "failure": dump(summary.first_failure) if summary.first_failure else None,
-                            "duration_ms": duration_ms,
-                        },
-                    )
-
-            return result
-        finally:
-            with _GIT_LOCK:
-                remove_worktree(repo, worktree_dir)
-            if worktree_dir.exists():
-                shutil.rmtree(worktree_dir, ignore_errors=True)
+        return result
 
     max_workers = min(len(plan.layers), getattr(config, "parallel", 4)) or 1
     with ThreadPoolExecutor(max_workers=max_workers) as executor:

@@ -37,7 +37,7 @@ from .report import make_report, write_report
 from .runs import RunDir, active_run, new_run_id, set_active
 from .slices import write_slices
 from .verify import verify
-from .gitio import GitError, merge_base, rev_parse
+from .gitio import merge_base, resolve_ref
 
 TOOL_NAMES: tuple[str, ...] = (
     "cleave_start",
@@ -59,12 +59,7 @@ VERIFY_PENDING_AFTER_S = 50
 
 def _resolve(repo: Path, ref: str) -> str:
     """A ref as given, else ``origin/<ref>`` (a branch that was fetched but never checked out)."""
-    for candidate in (ref, f"origin/{ref}"):
-        try:
-            return rev_parse(repo, candidate)
-        except GitError:
-            continue
-    raise ValueError(f"Can't find {ref!r} in {repo}. Fetch it first: git fetch origin {ref}")
+    return resolve_ref(repo, ref)
 
 
 def _slug(events: list[Any], run_id: str) -> str:
@@ -83,7 +78,7 @@ def repo_root(path: Path) -> Path:
     try:
         from .gitio import git
 
-        return Path(git(path, "rev-parse", "--show-toplevel"))
+        return Path(git(path, "rev-parse", "--show-toplevel").strip())
     except Exception:
         return path
 
@@ -126,7 +121,7 @@ def create_server(repo: Path) -> FastMCP:
         atoms = atomize(repo, base_ref, head_ref)
         graph = build_graph(repo, atoms)
 
-        run_id = new_run_id()
+        run_id = new_run_id(repo=repo)
         run = RunDir(repo, run_id).create()
         log = EventLog(run.events, run_id)
         log.emit(source="mcp", type_="mcp.called", tool="cleave_start", payload={"arguments": {"base": base, "head": head}})

@@ -157,12 +157,14 @@ def test_foreign_lines_are_measured_not_assumed(repo: FixtureRepo) -> None:
     report = json.loads(report_path.read_text())
     partition = next(c for c in report["checks"] if c["id"] == "partition")
     assert report["foreign_lines"] == 0 and partition["status"] == "pass"
-    # The measurement itself: a tree that differs from the head counts its differing lines.
+    # The measurement itself: a top tree with code the change doesn't add counts those lines.
     from cleave.build import foreign_lines
     from cleave.models import AtomsFile
 
+    from .test_atomize_build import tree_with_extra_lines
+
     atoms = AtomsFile.model_validate_json((report_path.parent / "atoms.json").read_text())
-    assert foreign_lines(repo.path, atoms, repo.tree(repo.base)) > 0
+    assert foreign_lines(repo.path, atoms, tree_with_extra_lines(repo, repo.head, "app/models.py", "X = 1\n")) == 1
 
 
 def test_a_long_round_answers_pending_and_finishes_in_the_background(repo: FixtureRepo, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -197,3 +199,42 @@ def test_a_base_that_moved_on_is_split_like_a_pull_request(repo: FixtureRepo) ->
     assert started["atoms"] == len(atoms) and all(a["file"] != "CHANGELOG.md" for a in atoms)
     run = repo.path / ".cleave" / "runs" / started["run_id"] / "atoms.json"
     assert json.loads(run.read_text())["base_sha"] == repo.base
+
+
+def test_the_repository_root_is_a_clean_path(repo: FixtureRepo) -> None:
+    from cleave.mcp_server import repo_root
+
+    (repo.path / "app").mkdir(exist_ok=True)
+    assert repo_root(repo.path / "app") == repo.path.resolve()
+
+
+def test_bob_can_start_a_run_over_stdio(repo: FixtureRepo) -> None:
+    """The way Bob runs it: `cleave mcp --repo <repo>` as a subprocess, JSON-RPC over stdio."""
+    import sys
+
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
+    cleave = Path(sys.executable).parent / "cleave"
+
+    async def session() -> dict[str, Any]:
+        params = StdioServerParameters(command=str(cleave), args=["mcp", "--repo", str(repo.path)])
+        async with stdio_client(params) as (read, write), ClientSession(read, write) as client:
+            await client.initialize()
+            result = await client.call_tool("cleave_start", {"base": repo.base, "head": repo.head})
+            assert not result.isError, result.content[0].text
+            data = result.structuredContent or json.loads(result.content[0].text)
+            return data.get("result", data)
+
+    started = asyncio.run(session())
+    assert (repo.path / ".cleave" / "runs" / started["run_id"] / "atoms.json").exists()
+
+
+def test_the_run_id_can_come_from_the_runner_file(repo: FixtureRepo, monkeypatch: pytest.MonkeyPatch) -> None:
+    """MCP clients may start `cleave mcp` without the runner's environment: the file still works, once."""
+    monkeypatch.delenv("CLEAVE_RUN_ID", raising=False)
+    (repo.path / ".cleave").mkdir(exist_ok=True)
+    (repo.path / ".cleave" / "run-id").write_text("20260927-101500-job001\n")
+    server = create_server(repo.path)
+    assert call(server, "cleave_start", base=repo.base, head=repo.head)["run_id"] == "20260927-101500-job001"
+    assert not (repo.path / ".cleave" / "run-id").exists()

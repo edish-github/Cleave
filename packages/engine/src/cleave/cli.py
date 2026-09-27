@@ -25,7 +25,16 @@ from pathlib import Path
 
 from . import __version__
 from .config import CONFIG_PATH, RunConfig, load_config, render_config
-from .models import AtomsFile, BobStats, EvalRef, Graph, Plan, PullRequestRef, dump
+from .models import (
+    AtomsFile,
+    BobStats,
+    EvalRef,
+    Graph,
+    Plan,
+    PullRequestRef,
+    Report,
+    dump,
+)
 from .runs import RunDir, active_run, new_run_id, set_active
 
 GITIGNORE_LINES = (".cleave/runs/", ".cleave/active")
@@ -152,7 +161,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     cleave_dir.mkdir(parents=True, exist_ok=True)
     cleave_gitignore = cleave_dir / ".gitignore"
     if not cleave_gitignore.exists():
-        cleave_gitignore.write_text("runs/\nactive\n")
+        cleave_gitignore.write_text("runs/\nactive\nrun-id\nbob-*\n")
 
     print(f"Installed the Cleave mode in {target} and wrote {CONFIG_PATH}.")
     return 0
@@ -306,11 +315,178 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0 if all(r.status == "pass" for r in res.results) else 1
 
 
-def _not_yet(name: str):
-    def run(_: argparse.Namespace) -> int:
-        raise SystemExit(f"`cleave {name}` is not implemented yet.")
+def cmd_publish(args: argparse.Namespace) -> int:
+    from .events import EventLog
+    from .publish import publish
+    from .report import write_report
 
-    return run
+    repo = Path(args.repo).resolve()
+    run = _run(repo, args.run)
+    report = Report.model_validate_json(run.report.read_text())
+    result = publish(
+        repo, report, base_branch=args.base, remote=args.remote, method=args.method
+    )
+    write_report(run, report.model_copy(update={"publish": result}))
+    EventLog(run.events, run.run_id).emit(
+        "engine",
+        "stack.published",
+        {
+            "pull_requests": len(result.pull_requests),
+            "method": result.method,
+            "urls": [p.url for p in result.pull_requests],
+        },
+    )
+    for pr in result.pull_requests:
+        print(f"layer {pr.layer}: #{pr.number} {pr.url} (into {pr.base})")
+    print("Run `cleave push` again to show the pull requests on the stack's page.")
+    return 0
+
+
+def _repo_dir(workdir: Path, url: str) -> Path:
+    name = url.rstrip("/").rsplit("/", 1)[-1]
+    return workdir / (name[:-4] if name.endswith(".git") else name)
+
+
+def _ensure_commits(repo: Path, shas: list[str]) -> None:
+    from .gitio import GitError, git
+
+    for sha in shas:
+        try:
+            git(repo, "cat-file", "-e", f"{sha}^{{commit}}")
+        except GitError:
+            git(repo, "fetch", "-q", "origin", sha)
+
+
+def cmd_eval_build(args: argparse.Namespace) -> int:
+    from .eval.build_dataset import build, load_datasets
+    from .gitio import git
+
+    datasets_path = Path(args.datasets).resolve()
+    out_dir = (
+        Path(args.ground_truth_dir).resolve()
+        if args.ground_truth_dir
+        else datasets_path.parent / "ground_truth"
+    )
+    out_dir.mkdir(parents=True, exist_ok=True)
+    workdir = Path(args.workdir).expanduser().resolve()
+    workdir.mkdir(parents=True, exist_ok=True)
+    for ds in load_datasets(datasets_path):
+        if args.only and ds.name not in args.only:
+            continue
+        repo = _repo_dir(workdir, ds.repo)
+        if not (repo / ".git").exists():
+            print(f"cloning {ds.repo} into {repo}")
+            git(workdir, "clone", "-q", ds.repo, str(repo))
+        _ensure_commits(repo, [ds.base, *ds.commits])
+        built = build(repo, ds)
+        by_commit: dict[str, int] = {}
+        for sha in built.ground_truth.values():
+            by_commit[sha] = by_commit.get(sha, 0) + 1
+        out = out_dir / f"{ds.name}.json"
+        out.write_text(
+            json.dumps(
+                {
+                    "dataset": ds.name,
+                    "repo": ds.repo,
+                    "base": built.base_sha,
+                    "head": built.head_sha,
+                    "branch": built.branch,
+                    "commits": [git(repo, "rev-parse", c).strip() for c in ds.commits],
+                    "atoms": built.ground_truth,
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        spread = ", ".join(f"{sha[:7]}: {n}" for sha, n in by_commit.items())
+        print(
+            f"{ds.name}: {built.branch} = {built.head_sha[:12]} in {repo} · {len(built.ground_truth)} atoms ({spread}) → {out}"
+        )
+    return 0
+
+
+def _truth(path: str | None) -> dict[str, str] | None:
+    if not path:
+        return None
+    data = json.loads(Path(path).read_text())
+    return data.get("atoms", data) if isinstance(data, dict) else None
+
+
+def cmd_eval_metrics(args: argparse.Namespace) -> int:
+    from .eval.metrics import metrics
+
+    run = _run(Path(args.repo).resolve(), args.run)
+    if not run.report.exists():
+        raise SystemExit(
+            f"Run {run.run_id} has no report yet: finish it first (cleave_finish in Bob)."
+        )
+    report = Report.model_validate_json(run.report.read_text())
+    print(json.dumps(metrics(report, _truth(args.ground_truth)).as_dict(), indent=2))
+    return 0
+
+
+def cmd_eval_baseline(args: argparse.Namespace) -> int:
+    from .baselines import branch_list, measure_baseline
+
+    repo = Path(args.repo).resolve()
+    branches: list[str] = []
+    for pattern in args.branches:
+        found = (
+            branch_list(repo, pattern)
+            if any(ch in pattern for ch in "*?[")
+            else [pattern]
+        )
+        branches += [b for b in found if b not in branches]
+    if not branches:
+        raise SystemExit(f"No local branches match {' '.join(args.branches)}.")
+    config = load_config(repo)
+    if args.check:
+        config = config.model_copy(update={"check_command": args.check})
+    run = measure_baseline(
+        repo, args.base, args.head, branches, config, run_id=args.run
+    )
+    report = Report.model_validate_json(run.report.read_text())
+    print(
+        f"run {run.run_id}: {report.status} · {len(branches)} branches ({', '.join(branches)})"
+    )
+    for check in report.checks:
+        print(f"  {check.id:<13} {check.status:<9} {check.value:<12} {check.detail}")
+    for layer in report.layers:
+        tests = (
+            f"{layer.tests_passed} passed"
+            if layer.tests_passed is not None
+            else "no test count"
+        )
+        failed = f", {layer.tests_failed} failed" if layer.tests_failed else ""
+        print(
+            f"  {layer.index}. {layer.branch}: {layer.status} ({tests}{failed}) +{layer.added} -{layer.removed}, {len(layer.atoms)} atoms"
+        )
+    print(f"Next: cleave push --run {run.run_id} --kind baseline_b1 --title ...")
+    return 0
+
+
+def cmd_runner(args: argparse.Namespace) -> int:
+    from .runner.client import RunnerAuthError, RunnerClient
+    from .runner.job import serve
+
+    url = args.url or os.environ.get("CLEAVE_URL")
+    token = args.token or os.environ.get("CLEAVE_TOKEN")
+    if not url or not token:
+        raise SystemExit(
+            "Set CLEAVE_URL and CLEAVE_TOKEN (Settings → Bob & runners), or pass --url and --token."
+        )
+    workdir = Path(args.workdir).expanduser().resolve()
+    client = RunnerClient(url, token)
+    print(f"Runner for {url}: jobs are cloned into {workdir}. Ctrl-C to stop.")
+    try:
+        serve(client, workdir, once=args.once, bob=args.bob)
+    except RunnerAuthError as e:
+        raise SystemExit(str(e)) from e
+    except KeyboardInterrupt:
+        print("Stopped.")
+    finally:
+        client.close()
+    return 0
 
 
 def parser() -> argparse.ArgumentParser:
@@ -349,10 +525,40 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--run")
     s.set_defaults(func=cmd_verify)
 
-    for name, help_ in (("publish", "Open stacked pull requests"), ("runner", "Run jobs from the web app"), ("eval", "Constructed diffs and baselines")):
-        s = sub.add_parser(name, help=help_)
-        s.add_argument("--run")
-        s.set_defaults(func=_not_yet(name))
+    s = sub.add_parser("publish", help="Push the layer branches and open one pull request per layer")
+    s.add_argument("--base", required=True, help="Branch the first layer's pull request targets, e.g. main")
+    s.add_argument("--run", help="Run id (default: the latest)")
+    s.add_argument("--remote", default="origin")
+    s.add_argument("--method", default="auto", choices=["auto", "chained", "stacked"])
+    s.set_defaults(func=cmd_publish)
+
+    ev = sub.add_parser("eval", help="Constructed diffs, baselines and metrics for /results")
+    esub = ev.add_subparsers(dest="eval_command", required=True)
+    s = esub.add_parser("build", help="Build every dataset's cleave-eval/<name> branch and its ground truth")
+    s.add_argument("--datasets", default="eval/datasets.toml")
+    s.add_argument("--workdir", required=True, help="Where the datasets' repositories are (or get cloned)")
+    s.add_argument("--only", nargs="*", help="Dataset names to build (default: all)")
+    s.add_argument("--ground-truth-dir", help="Default: ground_truth/ next to the datasets file")
+    s.set_defaults(func=cmd_eval_build)
+    s = esub.add_parser("metrics", help="Print a run's /results metrics")
+    s.add_argument("--run", help="Run id (default: the latest)")
+    s.add_argument("--ground-truth", help="Ground truth JSON from `cleave eval build`")
+    s.set_defaults(func=cmd_eval_metrics)
+    s = esub.add_parser("baseline", help="Measure a stack of branches made without Cleave (B1) as a run")
+    s.add_argument("--base", required=True, help="The change's base, e.g. main")
+    s.add_argument("--head", required=True, help="The change's head, e.g. feat/loyalty-and-seat-upgrades")
+    s.add_argument("--branches", required=True, nargs="+", help='The stack, bottom first: a glob ("b1/*", natural order) or names')
+    s.add_argument("--check", help="Check command (default: .cleave/config.toml)")
+    s.add_argument("--run", help="Run id (default: new)")
+    s.set_defaults(func=cmd_eval_baseline)
+
+    s = sub.add_parser("runner", help="Run split jobs queued in the web app with bob run")
+    s.add_argument("--workdir", default="~/.cleave/runner", help="Where job checkouts go (default: ~/.cleave/runner)")
+    s.add_argument("--once", action="store_true", help="Claim once (waiting up to 25 s), run the job if there is one, then exit")
+    s.add_argument("--url", help="Web app URL (default: $CLEAVE_URL)")
+    s.add_argument("--token", help="Runner token (default: $CLEAVE_TOKEN)")
+    s.add_argument("--bob", default="bob", help="Bob Shell executable (default: bob on PATH)")
+    s.set_defaults(func=cmd_runner)
 
     s = sub.add_parser("mcp", help="Serve the Cleave tools to Bob over stdio")
     s.add_argument("--repo", help="Target repository root (default: current directory)")

@@ -6,6 +6,9 @@ head tree, and nothing touches the user's working tree.
 
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
+
 import pytest
 
 from cleave.atomize import atom_id, atomize
@@ -145,10 +148,34 @@ def test_build_stack_chains_commits_on_named_branches(repo: FixtureRepo) -> None
         parent = layer.commit
 
 
-def test_foreign_lines_are_zero_when_the_top_matches(repo: FixtureRepo) -> None:
+def tree_with_extra_lines(repo: FixtureRepo, ref: str, path: str, extra: str) -> str:
+    """``ref``'s tree with ``extra`` appended to ``path``, built without touching the checkout."""
+    import os
+    import tempfile
+
+    text = git(repo.path, "show", f"{ref}:{path}") + "\n" + extra
+    blob = subprocess.run(
+        ["git", "-C", str(repo.path), "hash-object", "-w", "--stdin"], input=text, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    fd, index = tempfile.mkstemp()
+    os.close(fd)
+    os.unlink(index)
+    env = {**os.environ, "GIT_INDEX_FILE": index}
+    try:
+        subprocess.run(["git", "-C", str(repo.path), "read-tree", ref], env=env, check=True)
+        subprocess.run(["git", "-C", str(repo.path), "update-index", "--cacheinfo", f"100644,{blob},{path}"], env=env, check=True)
+        return subprocess.run(["git", "-C", str(repo.path), "write-tree"], env=env, capture_output=True, text=True, check=True).stdout.strip()
+    finally:
+        Path(index).unlink(missing_ok=True)
+
+
+def test_foreign_lines_count_code_the_change_does_not_add(repo: FixtureRepo) -> None:
     atoms = atomize(repo.path, repo.base, repo.head)
     assert foreign_lines(repo.path, atoms, repo.tree(repo.head)) == 0
-    assert foreign_lines(repo.path, atoms, repo.tree(repo.base)) > 0
+    # Leaving part of the change out is a coverage and fidelity problem, not new code.
+    assert foreign_lines(repo.path, atoms, repo.tree(repo.base)) == 0
+    invented = tree_with_extra_lines(repo, repo.head, "app/models.py", "def invented():\n    return 42\n")
+    assert foreign_lines(repo.path, atoms, invented) == 2
 
 
 @pytest.mark.parametrize(

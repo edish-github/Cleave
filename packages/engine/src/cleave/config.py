@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 import tomllib
 from pathlib import Path
 
@@ -36,9 +37,11 @@ def load_config(repo: Path) -> RunConfig:
 
 
 def render_config(config: RunConfig) -> str:
+    """TOML for ``config``. Strings are written as JSON strings, which are valid TOML basic
+    strings, so check commands with quotes or backslashes survive the round trip."""
     lines = ["[cleave]"]
     for key, value in config.model_dump().items():
         if value is None:
             continue
-        lines.append(f"{key} = {value!r}" if not isinstance(value, str) else f'{key} = "{value}"')
+        lines.append(f"{key} = {json.dumps(value)}")
     return "\n".join(lines) + "\n"

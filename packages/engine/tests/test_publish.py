@@ -26,7 +26,7 @@ from cleave.publish import publish
 from .conftest import FixtureRepo, git
 from .test_mcp import call
 
-# Phase 5 spec, kept out of the default run (and CI) until its task lands.
+# Phase 5 spec, part of the default run and CI; -m publish runs it alone.
 pytestmark = pytest.mark.publish
 
 FAKE_GH = """#!/bin/sh
@@ -127,3 +127,21 @@ def test_an_unverified_stack_is_refused(verified: tuple[FixtureRepo, Path, Path]
     with pytest.raises(ValueError):
         publish(repo.path, report, base_branch="main")
     assert "pr create" not in (log.read_text() if log.exists() else "")
+
+
+def test_a_rerun_reuses_the_open_pull_requests(verified: tuple[FixtureRepo, Path, Path], tmp_path: Path) -> None:
+    """If a first attempt opened the PRs, publishing again finds them instead of failing."""
+    repo, report_path, log = verified
+    gh = tmp_path / "bin" / "gh"
+    gh.write_text(
+        FAKE_GH.replace(
+            'case "$1 $2" in',
+            'case "$1 $2" in\n  "pr list") echo \'[{"number": 7, "url": "https://github.com/o/r/pull/7", "baseRefName": "main"}]\' ;;',
+        )
+    )
+    result = publish(repo.path, _report(report_path), base_branch="main")
+    calls = log.read_text().splitlines()
+    assert not any(line.startswith("pr create") for line in calls)
+    assert [pr.number for pr in result.pull_requests] == [7, 7]
+    # Layer 2's PR must target layer 1's branch: its base is corrected.
+    assert any(line.startswith("pr edit 7 --base cleave/") for line in calls)

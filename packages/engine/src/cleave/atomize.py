@@ -28,12 +28,13 @@ def is_test_path(path: str) -> bool:
     return "/tests/" in f"/{path}" or name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py"
 
 
-def atomize(repo: Path, base: str, head: str) -> AtomsFile:
+def atomize(repo: Path, base: str, head: str, require_clean: bool = True) -> AtomsFile:
     """Diff ``base..head`` and return every atom, in diff order.
 
     Raises ``ValueError`` if the working tree is dirty or the refs don't resolve.
+    ``require_clean=False`` is for callers that only read commits (evaluation datasets).
     """
-    if not is_clean(repo):
+    if require_clean and not is_clean(repo):
         raise ValueError(f"Working tree at {repo} is dirty")
 
     try:

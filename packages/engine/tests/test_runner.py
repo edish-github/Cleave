@@ -26,7 +26,7 @@ from cleave.runner.job import prepare_checkout, run_job
 
 from .conftest import FixtureRepo, git
 
-# P1: kept out of the default run (and CI) so a cut Phase 7 never leaves CI red.
+# Phase 7 (P1) spec, part of the default run and CI; -m runner runs it alone.
 pytestmark = pytest.mark.runner
 
 URL = "https://cleave.test"
@@ -196,6 +196,8 @@ def test_checkout_is_the_head_branch_with_the_mode_and_the_job_config(remote: Fi
     assert (config.max_layer_lines, config.max_repair_rounds, config.bobcoin_cap) == (300, 2, 2.5)
     assert (checkout / ".bob" / "custom_modes.yaml").exists()
     assert (checkout / ".bob" / "mcp.json").exists()
+    # The run Bob starts takes the job id even if Bob doesn't pass CLEAVE_RUN_ID to `cleave mcp`.
+    assert (checkout / ".cleave" / "run-id").read_text().strip() == job.job_id
 
 
 def test_a_failing_bob_run_completes_the_job_as_failed(remote: FixtureRepo, tmp_path: Path) -> None:

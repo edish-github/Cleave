@@ -45,6 +45,16 @@ def rev_parse(repo: Path, ref: str) -> str:
     return git(repo, "rev-parse", ref).strip()
 
 
+def resolve_ref(repo: Path, ref: str) -> str:
+    """A ref as given, else ``origin/<ref>`` (a branch that was fetched but never checked out)."""
+    for candidate in (ref, f"origin/{ref}"):
+        try:
+            return rev_parse(repo, candidate)
+        except GitError:
+            continue
+    raise ValueError(f"Can't find {ref!r} in {repo}. Fetch it first: git fetch origin {ref}")
+
+
 def merge_base(repo: Path, a: str, b: str) -> str:
     """The commit a pull request from ``b`` into ``a`` is diffed against (GitHub's three-dot diff)."""
     return git(repo, "merge-base", a, b).strip()

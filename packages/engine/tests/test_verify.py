@@ -61,3 +61,11 @@ def test_excerpt_keeps_the_short_summary_and_respects_the_limit() -> None:
     assert "short test summary info" in text
     assert "test_get_user_bookings" in text
     assert len(excerpt("x" * 50_000, limit=4000)) <= 4000
+
+
+def test_quiet_mode_summary_without_rules() -> None:
+    """`pytest -q` prints the last line bare, with skipped/xfailed counts mixed in."""
+    out = "....F.\nFAILED tests/test_info.py::test_context - AssertionError: nope\n7 failed, 610 passed, 21 skipped, 1 xfailed in 1.16s\n"
+    summary = parse_pytest(out)
+    assert (summary.passed, summary.failed) == (610, 7)
+    assert summary.first_failure is not None and summary.first_failure.test == "tests/test_info.py::test_context"

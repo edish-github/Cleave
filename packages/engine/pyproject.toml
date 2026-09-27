@@ -33,9 +33,10 @@ testpaths = ["tests"]
 markers = [
   "integration: needs a local clone of the Galaxium fork (set GALAXIUM_REPO)",
   "bob: needs real Bob hook payloads in tests/payloads (open check C1)",
-  "runner: Phase 7 (P1) runner specs, run with -m runner",
-  "publish: Phase 5 publish specs (task10), run with -m publish",
-  "eval: Phase 6 evaluation specs (task11), run with -m eval",
+  "runner: Phase 7 (P1) runner specs (in the default run; -m runner runs them alone)",
+  "publish: Phase 5 publish specs (in the default run; -m publish runs them alone)",
+  "eval: Phase 6 evaluation specs (in the default run; -m eval runs them alone)",
 ]
-# The default run is the CI suite. Phase-gated specs run with -m <marker> (the last -m wins).
-addopts = "-ra -m 'not integration and not bob and not runner and not publish and not eval'"
+# The default run is the CI suite: everything but what needs a Galaxium clone or real Bob
+# payloads. -m <marker> runs one group (the last -m wins).
+addopts = "-ra -m 'not integration and not bob'"
