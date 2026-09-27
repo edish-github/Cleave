@@ -5,7 +5,13 @@
 # original commits kept as ground truth. Built by `cleave eval build` (task11).
 #
 # Checked on 2026-09-27: the check command passes at `base` and at the constructed head
-# with the setup below. click is BSD-3-Clause licensed; Galaxium Travels is IBM's public
+# with the setup below.
+#
+# The click checks leave out two cases of test_echo_via_pager ("Exception in generator ...",
+# ids test5/test6, times each pager). They race the pager process against the generator's
+# exception, so they fail when two test runs share the machine, which is what Cleave's
+# parallel verification does: with them in, 2 concurrent runs of the same head failed 5
+# times out of 6; without them, 21 of 21 concurrent runs passed. click is BSD-3-Clause licensed; Galaxium Travels is IBM's public
 # Bob demo application (fork: edish-github/galaxium-travels).
 
 [[datasets]]
@@ -19,8 +25,8 @@ commits = [
 ]
 paths = ["src", "tests"]
 setup = 'uv venv .venv --python 3.11 && uv pip install --python .venv "pytest<8.4"'
-check = "PYTHONPATH=src python -m pytest -q -p no:cacheprovider"
-# constructed diff: 19 files, +812 -131; tests at head: 902 passed
+check = 'PYTHONPATH=src python -m pytest -q -p no:cacheprovider -k "not (test_echo_via_pager and (test5 or test6))"'
+# constructed diff: 19 files, +812 -131; tests: 708 passed at base, 890 at head (12 deselected)
 
 [[datasets]]
 name = "click-deprecated-params"
@@ -34,8 +40,8 @@ commits = [
 ]
 paths = ["src", "tests"]
 setup = 'uv venv .venv --python 3.11 && uv pip install --python .venv "pytest<8.4"'
-check = "PYTHONPATH=src python -m pytest -q -p no:cacheprovider"
-# constructed diff: 10 files, +417 -55; tests at head: 626 passed
+check = 'PYTHONPATH=src python -m pytest -q -p no:cacheprovider -k "not (test_echo_via_pager and (test5 or test6))"'
+# constructed diff: 10 files, +417 -55; tests: 617 passed at base, 624 at head (2 deselected)
 
 [[datasets]]
 name = "click-nosuchcommand"
@@ -49,8 +55,8 @@ commits = [
 ]
 paths = ["src", "tests"]
 setup = 'uv venv .venv --python 3.11 && uv pip install --python .venv "pytest<8.4"'
-check = "PYTHONPATH=src python -m pytest -q -p no:cacheprovider"
-# constructed diff: 19 files, +449 -189; tests at head: 1494 passed
+check = 'PYTHONPATH=src python -m pytest -q -p no:cacheprovider -k "not (test_echo_via_pager and (test5 or test6))"'
+# constructed diff: 19 files, +449 -189; tests: 1472 passed at base, 1482 at head (12 deselected)
 
 [[datasets]]
 name = "galaxium-lint-pass"
