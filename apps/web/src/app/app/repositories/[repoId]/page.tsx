@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageContainer, PageHeader, Section } from "@/components/layout/PageHeader";
+import { RunSettings } from "@/components/repository/RunSettings";
 import { BackLink } from "@/components/stack/StackHeader";
 import { StackList } from "@/components/stack/StackList";
 import { BackendRequiredButton } from "@/components/ui/BackendRequired";
@@ -149,46 +150,31 @@ export default async function RepositoryPage({ params }: { params: Params }) {
           </Section>
         </div>
 
-        <Section
-          title="Run settings"
-          action={
-            <BackendRequiredButton
-              variant="ghost"
-              size="sm"
-              title="Editing needs the backend"
-              description="Run settings are stored with the repository on the Cleave backend. In the sample workspace they're read-only."
-            >
-              Edit
-            </BackendRequiredButton>
+        <RunSettings
+          repoId={repo.id}
+          config={config}
+          readOnlyAction={
+            repo.connection === "sample" ? (
+              <BackendRequiredButton
+                variant="ghost"
+                size="sm"
+                title="Editing needs the backend"
+                description="Run settings are stored with the repository on the Cleave backend. In the sample workspace they're read-only."
+              >
+                Edit
+              </BackendRequiredButton>
+            ) : undefined
           }
-        >
-          <Card>
-            <dl className="divide-y divide-line text-[13px]">
-              <Setting label="Check command" value={config.checkCommand} mono hint="Must pass on every layer" />
-              <Setting label="Setup command" value={config.setupCommand} mono />
-              <Setting label="Working directory" value={config.workingDirectory} mono />
-              <Setting label="Layer size limit" value={`${config.maxLayerLines} lines`} />
-              <Setting label="Bobcoin cap" value={`${config.bobcoinCap} per run`} hint="Passed to bob run as --max-cost" />
-            </dl>
-          </Card>
-          <p className="px-1 text-[12px] text-ink-3">
-            {repo.connection === "connected" ? `Synced with GitHub ${timeAgo(repo.lastSyncedAt, now)}.` : "Sample data."}{" "}
-            <Link href={routes.bobDocs} className="text-ink-2 hover:text-ink">
-              How runs use these
-            </Link>
-          </p>
-        </Section>
+          footer={
+            <>
+              {repo.connection === "connected" ? `Synced with GitHub ${timeAgo(repo.lastSyncedAt, now)}.` : "Sample data."}{" "}
+              <Link href={routes.bobDocs} className="text-ink-2 hover:text-ink">
+                How runs use these
+              </Link>
+            </>
+          }
+        />
       </div>
     </PageContainer>
-  );
-}
-
-function Setting({ label, value, mono, hint }: { label: string; value: string; mono?: boolean; hint?: string }) {
-  return (
-    <div className="px-4 py-3">
-      <dt className="text-ink-3">{label}</dt>
-      <dd className={mono ? "mt-1 font-mono text-[12px] break-all text-ink" : "mt-1 text-[14px] text-ink"}>{value}</dd>
-      {hint ? <p className="mt-0.5 text-[12px] text-ink-3">{hint}</p> : null}
-    </div>
   );
 }

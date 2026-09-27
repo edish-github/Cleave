@@ -186,6 +186,10 @@ export const sampleClient: CleaveClient = {
       throw new Error("Connecting repositories needs a GitHub account. Sign in with GitHub to connect one.");
     },
 
+    async updateConfig() {
+      throw new Error("Run settings are read-only in the sample workspace.");
+    },
+
     pullRequests: cache(async (repoId: string): Promise<PullRequest[]> => {
       const { built, now } = await loadWorkspace();
       const repo = repositorySpecs.find((r) => r.id === repoId);

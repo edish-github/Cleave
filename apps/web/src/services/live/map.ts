@@ -349,6 +349,12 @@ function describeEvent(type: string, p: Payload, tool: string | null): { title: 
   const round = num(p, "round");
   switch (type) {
     case "run.started":
+      if (str(p, "baseline"))
+        return {
+          title: "Baseline stack measured",
+          detail: Array.isArray(p.branches) ? `${plural(p.branches.length, "branch", "branches")} made without Cleave` : "Branches made without Cleave",
+          tone: "accent",
+        };
       return { title: "Cleave run started", detail: str(p, "head_branch") ?? str(p, "head") ?? "Splitting the change", tone: "accent" };
     case "run.finished":
     case "run.completed":
@@ -398,6 +404,12 @@ function describeEvent(type: string, p: Payload, tool: string | null): { title: 
       return { title: `Bob called ${tool ?? str(p, "tool") ?? "a Cleave tool"}`, detail: str(p, "summary") ?? "", tone: "neutral" };
     case "stack.published":
       return { title: "Stack published", detail: plural(num(p, "pull_requests"), "pull request"), tone: "ok" };
+    case "runner.bob_started":
+      return { title: "Runner started bob run", detail: str(p, "prompt") ?? "", tone: "neutral" };
+    case "runner.bob_exited": {
+      const code = num(p, "exit_code");
+      return { title: code === 0 ? "bob run finished" : `bob run exited with code ${code ?? "?"}`, detail: "", tone: code === 0 ? "ok" : "attention" };
+    }
     default: {
       const words = type.replace(/[._]/g, " ");
       return { title: words[0]!.toUpperCase() + words.slice(1), detail: "", tone: "neutral" };

@@ -4,6 +4,7 @@ import type {
   CiState,
   Layer,
   PullRequest,
+  RepoConfig,
   Repository,
   RepositorySummary,
   RunJob,
@@ -51,6 +52,8 @@ export interface CleaveClient {
     /** GitHub repositories the user could connect. Empty when GitHub isn't linked. */
     available(): Promise<AvailableRepository[]>;
     connect(fullName: string): Promise<{ repoId: string }>;
+    /** Run settings used by splits started from the browser (the runner's job config). */
+    updateConfig(repoId: string, config: RepoConfig): Promise<void>;
   };
 
   stacks: {

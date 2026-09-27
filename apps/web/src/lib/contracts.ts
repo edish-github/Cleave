@@ -426,7 +426,7 @@ export interface Event {
   ts: string;
   source: "engine" | "bob" | "hook" | "runner" | "mcp";
   /**
-   * Known types: run.started, run.finished, atoms.cut, graph.built, slices.written, subagent.spawned, subagent.finished, plan.proposed, plan.checked, verify.started, layer.passed, layer.failed, verify.passed, atoms.moved, review.required, layers.merged, layer.described, hook.allowed, hook.blocked, mcp.called, stack.published. Unknown types are shown generically.
+   * Known types: run.started, run.finished, atoms.cut, graph.built, slices.written, subagent.spawned, subagent.finished, plan.proposed, plan.checked, verify.started, layer.passed, layer.failed, verify.passed, atoms.moved, review.required, layers.merged, layer.described, hook.allowed, hook.blocked, mcp.called, stack.published, runner.bob_started, runner.bob_exited. Unknown types are shown generically.
    */
   type: string;
   run_id?: string | null;

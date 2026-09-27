@@ -333,6 +333,23 @@ export function createLiveClient(
         if (!row) throw new Error("Couldn't connect the repository.");
         return { repoId: row.id };
       },
+      async updateConfig(repoId, config) {
+        const row = (await repoRows()).find((r) => r.id === repoId);
+        if (!row) throw new Error("Repository not found.");
+        await db()
+          .update(schema.repositories)
+          .set({
+            config: {
+              ...row.config,
+              checkCommand: config.checkCommand,
+              setupCommand: config.setupCommand || null,
+              workingDirectory: config.workingDirectory || ".",
+              maxLayerLines: config.maxLayerLines,
+              bobcoinCap: config.bobcoinCap,
+            },
+          })
+          .where(and(eq(schema.repositories.id, repoId), eq(schema.repositories.userId, userId)));
+      },
     },
 
     stacks: {

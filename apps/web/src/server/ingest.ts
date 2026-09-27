@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Bundle } from "@/lib/contracts";
 import { db, schema, type Db } from "./db/client";
 
@@ -69,10 +69,12 @@ export async function ingestBundle(bundle: Bundle, userId: string, runnerId: str
   const isBaseline = (bundle.run_kind ?? "cleave") !== "cleave";
 
   return db().transaction(async (tx) => {
-    // Repository: one row per user and full name. Run settings follow the latest run.
+    // Repository: one row per user and full name. Run settings follow the latest run, merged
+    // into what's stored so the limits (and a setup command a run didn't use) set on the
+    // repository page are kept.
     const config = {
       checkCommand: report.command,
-      setupCommand: report.setup_command ?? null,
+      ...(report.setup_command ? { setupCommand: report.setup_command } : {}),
       workingDirectory: report.working_directory ?? ".",
     };
     const [repo] = await tx
@@ -80,7 +82,10 @@ export async function ingestBundle(bundle: Bundle, userId: string, runnerId: str
       .values({ userId, fullName: bundle.repo.full_name, defaultBranch: bundle.repo.default_branch ?? "main", config })
       .onConflictDoUpdate({
         target: [schema.repositories.userId, schema.repositories.fullName],
-        set: { config, ...(bundle.repo.default_branch ? { defaultBranch: bundle.repo.default_branch } : {}) },
+        set: {
+          config: sql`${schema.repositories.config} || ${JSON.stringify(config)}::jsonb`,
+          ...(bundle.repo.default_branch ? { defaultBranch: bundle.repo.default_branch } : {}),
+        },
       })
       .returning();
     if (!repo) throw new IngestError("Couldn't store the repository.", 500);

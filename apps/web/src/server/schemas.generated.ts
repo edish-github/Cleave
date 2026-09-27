@@ -343,7 +343,7 @@ export const schemas = {
     "type": {
       "type": "string",
       "pattern": "^[a-z_]+(\\.[a-z_]+)+$",
-      "description": "Known types: run.started, run.finished, atoms.cut, graph.built, slices.written, subagent.spawned, subagent.finished, plan.proposed, plan.checked, verify.started, layer.passed, layer.failed, verify.passed, atoms.moved, review.required, layers.merged, layer.described, hook.allowed, hook.blocked, mcp.called, stack.published. Unknown types are shown generically."
+      "description": "Known types: run.started, run.finished, atoms.cut, graph.built, slices.written, subagent.spawned, subagent.finished, plan.proposed, plan.checked, verify.started, layer.passed, layer.failed, verify.passed, atoms.moved, review.required, layers.merged, layer.described, hook.allowed, hook.blocked, mcp.called, stack.published, runner.bob_started, runner.bob_exited. Unknown types are shown generically."
     },
     "run_id": {
       "type": [
