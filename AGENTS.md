@@ -81,20 +81,17 @@ Cleave/
 │   │   │   ├── custom_modes.yaml mcp.json settings.json
 │   │   │   ├── hooks/{guard,audit}.py
 │   │   │   └── rules-cleave/{01-procedure,02-plan-schema,03-repair}.md
-│   │   ├── baselines.py                                            ◐ Phase 4 · task09
-│   │   ├── publish.py                                              ◐ Phase 5 · task10, spec: test_publish.py
-│   │   ├── eval/{build_dataset,metrics}.py                         ◐ Phase 6 · task11, spec: test_eval.py
-│   │   ├── runner/{client,job,bobshell}.py                         ◐ Phase 7 · task13 (P1), spec: test_runner.py
+│   │   ├── baselines.py                                            ● Phase 4 · task09, spec: test_baselines.py
+│   │   ├── publish.py                                              ● Phase 5 · task10, spec: test_publish.py
+│   │   ├── eval/{build_dataset,metrics}.py                         ● Phase 6 · task11, spec: test_eval.py
+│   │   ├── runner/{client,job,bobshell}.py                         ● Phase 7 · task13 (P1), spec: test_runner.py
 │   │   └── describe.py                                             ◐ P2 (watsonx.ai), cut first
 │   └── tests/
 │       ├── conftest.py               ● `make_repo`: a small git repo with a realistic PR
 │       ├── test_models.py test_atomize_build.py test_graph.py test_plan.py
-│       │   test_verify.py test_report.py test_mcp.py test_hooks.py test_init.py   ● green (the CI suite)
+│       │   test_verify.py test_report.py test_mcp.py test_hooks.py test_init.py
+│       │   test_baselines.py test_publish.py test_eval.py test_runner.py        ● green (the CI suite)
 │       ├── test_galaxium.py          ● integration, needs GALAXIUM_REPO
-│       ├── test_baselines.py         ○ Phase 4 (Bob writes it, task09)
-│       ├── test_publish.py           ◐ red spec, -m publish (task10)
-│       ├── test_eval.py              ◐ red spec, -m eval (task11)
-│       ├── test_runner.py            ◐ red spec, -m runner (task13)
 │       └── payloads/*.json           ◐ hand-written; replace from task08's real run (C1, C3)
 └── apps/web/                         Next.js 16, see apps/web/README.md
     ├── src/app/                      routes; (public) group: landing, docs, login, results
@@ -144,20 +141,19 @@ tokens come from the deployed app: Settings → Bob & runners → Create token. 
 | Tier | Command (from the package) | Runs in CI | When |
 | --- | --- | --- | --- |
 | Engine unit specs (the CI suite) | `uv run pytest -q` | yes | every engine task |
-| A phase's red specs | `uv run pytest -q -m publish` / `-m eval` / `-m runner` | no | that phase's task |
+| One phase's specs alone | `uv run pytest -q -m publish` / `-m eval` / `-m runner` | in the suite | that phase's task |
 | One spec file | `uv run pytest -q tests/test_graph.py` | — | while working on a task |
 | Galaxium integration | `GALAXIUM_REPO=~/galaxium-travels uv run pytest -q -m integration` | no | end of Phase 2, before M1 |
 | … with the backend's tests | add `GALAXIUM_VERIFY=1` (needs its requirements installed) | no | end of Phase 2 |
 | Real Bob payloads | `uv run pytest -q -m bob` | no | after payloads are saved (Phase 3) |
-| Runner (P1) | `uv run pytest -q -m runner` | no | Phase 7 |
 | Engine lint | `uv run ruff check src tests` | no | before committing |
 | Contracts in sync | `npm run contracts:check` | yes | after any schema change |
 | Web | `npm run typecheck && npm run lint && npm run build` | yes | every web change |
 | Ingest end to end | `cleave push …` to a local or deployed app (below) | no | Phase 3 onward |
 
-`uv run pytest -q` runs the CI suite: `pyproject.toml` deselects `integration`, `bob`,
-`runner`, `publish` and `eval` by default (a later `-m` wins). When a phase's task lands,
-it removes its marker from that default, so its specs join CI. Both CI jobs stay green.
+`uv run pytest -q` runs the CI suite: `pyproject.toml` deselects only `integration` and
+`bob` by default (a later `-m` wins). The phase specs (`publish`, `eval`, `runner`) landed
+with their tasks and are part of it. Both CI jobs stay green.
 
 Engine → web check without Bob (works today): take any finished run directory and push it.
 
@@ -264,11 +260,11 @@ builds something, and a runbook for the parts you run. Order and times:
 | task06 MCP server | [phase-3/task06](docs/tasks/phase-3/task06-mcp-server.md) | `test_mcp.py` | done |
 | task07 Bob config | [phase-3/task07](docs/tasks/phase-3/task07-bob-config.md) | `test_hooks.py`, `test_init.py` | done |
 | task08 first run | [phase-3/task08](docs/tasks/phase-3/task08-first-run.md) | — | **M1**: public proof of a real ✂ Cleave run, 0 blocked writes |
-| task09 B1 baseline | [phase-4/task09](docs/tasks/phase-4/task09-baselines.md) | `test_baselines.py` (Bob writes) | two B1 runs pushed; C1–C6 answered |
-| task10 publish | [phase-5/task10](docs/tasks/phase-5/task10-publish.md) | `test_publish.py` | **M2**: stacked PRs on the fork, green, on the Published tab |
-| task11 eval build | [phase-6/task11](docs/tasks/phase-6/task11-eval-build.md) | `test_eval.py` | ground truth for every dataset |
+| task09 B1 baseline | [phase-4/task09](docs/tasks/phase-4/task09-baselines.md) | `test_baselines.py` | code done; two B1 runs pushed; C1–C6 answered |
+| task10 publish | [phase-5/task10](docs/tasks/phase-5/task10-publish.md) | `test_publish.py` | code done; **M2**: stacked PRs on the fork, green, on the Published tab |
+| task11 eval build | [phase-6/task11](docs/tasks/phase-6/task11-eval-build.md) | `test_eval.py` | done: ground truth for every dataset |
 | task12 eval runs | [phase-6/task12](docs/tasks/phase-6/task12-eval-runs.md) | — | **M3**: `/results` with ≥ 3 rows |
-| task13 runner (P1) | [phase-7/task13](docs/tasks/phase-7/task13-runner.md) | `test_runner.py` | a browser-started run finishes on your machine |
+| task13 runner (P1) | [phase-7/task13](docs/tasks/phase-7/task13-runner.md) | `test_runner.py` | code done; a browser-started run finishes on your machine |
 | submission | [phase-8/submission](docs/tasks/phase-8/submission.md) | — | **M4**: video, assets, submitted |
 
 Never cut: the Bob IDE run, `/proof/:stackId`, `/results` with ≥ 3 diffs, `bob_sessions/`,

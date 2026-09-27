@@ -1,8 +1,22 @@
 # task10 · publish the stack as pull requests → M2
 
-**Phase 5** (10:45–11:45) · **Budget:** 1 Bobcoin · **Evidence:** `bob_sessions/SsnFall_task10_publish_summary.png`
+**Phase 5** (10:45–11:45) · **Budget:** 0 Bobcoins · **Evidence:** the PRs on the fork and the Published tab
 
-## Fork prep (once, before task08's run — it's task08's step 0)
+The code is done (handoff pack; spec `tests/test_publish.py`, 7 cases, in CI):
+
+- `cleave publish --base main [--run ID] [--remote origin] [--method auto|chained]` refuses
+  anything but a `verified` run.
+- It pushes every `cleave/*` layer branch with `git push --force-with-lease` of explicit
+  refspecs (no checkout, reset or commit), then opens one PR per layer with `gh pr create`:
+  layer 1 into `main`, layer n into layer n-1's branch.
+- Titles are `n/k · <layer name>`; bodies carry the layer's description, its line counts, the
+  check command and the run id.
+- It writes the PRs into `report.json` (`report.publish`), rewrites `report.md` and adds a
+  `stack.published` event, so the next `cleave push` makes the stack **published**.
+- `--method stacked` (gh-stack) is refused until open check C6 settles its commands. `auto`
+  means chained.
+
+## Fork prep (once, before task08's run: it's task08's step 0)
 
 GitHub runs a `pull_request` workflow from the PR's merge commit. In a chained stack, layer
 n's PR merges into layer n-1's branch, so the workflow file must already be in the commit
@@ -13,55 +27,27 @@ needs a Bob API key the fork doesn't have and would mark every PR red).
    `.github/workflows/backend-tests.yml` and push.
 2. In the fork: Actions → **🤖 Bob Review** → ⋯ → Disable workflow.
 3. `git checkout feat/loyalty-and-seat-upgrades && git merge main && git push`.
-   PR #1's diff stays the same (GitHub diffs against the merge base); Cleave now splits
-   against that same merge base, which contains the workflow.
-4. `gh auth login` on your machine (publish uses `gh`).
+   PR #1's diff stays the same (GitHub diffs against the merge base); Cleave splits against
+   that same merge base, which contains the workflow.
+4. `gh auth login` on your machine (publish uses `gh`), and `gh auth setup-git` so `git push`
+   uses the same login.
 
-## Brief for Bob (Code mode, Cleave repository)
-
-```
-Task 10: publish a verified stack as chained pull requests.
-
-Read AGENTS.md §1, packages/engine/src/cleave/publish.py and the spec
-packages/engine/tests/test_publish.py (it replaces `gh` with a recording stand-in and uses a
-local bare repository as origin).
-
-Change only:
-- packages/engine/src/cleave/publish.py
-- packages/engine/src/cleave/cli.py          (`cleave publish --base <branch> [--run ID] [--method auto|chained|stacked] [--remote origin]`)
-- .github/workflows/ci.yml                    (drop `and not publish` from the default markers
-                                               in packages/engine/pyproject.toml once green)
-
-Requirements:
-1. publish(repo, report, base_branch, remote="origin", method="auto") -> Publish.
-   Refuse (ValueError) unless report.status == "verified".
-2. Push every layer branch (report.layers[i].branch) to the remote with plain `git push`
-   of explicit refspecs; never check out, reset or commit.
-3. method "chained": one `gh pr create --head <branch> --base <base> --title <t> --body <b>`
-   per layer, in order; layer 1's base is base_branch, layer n's base is layer n-1's branch.
-   Title "<n>/<k> · <layer name>", body: the layer's description (or rationale), its line
-   counts, and "Part <n> of a stack split by Cleave; every layer passes the tests on its own."
-   Parse the number from the URL gh prints.
-4. method "auto": "stacked" when `gh extension list` shows gh-stack (open check C6), else
-   "chained". Implement "stacked" only if C6 said yes; otherwise auto always means chained.
-5. `cleave publish` writes the result into report.json (report.publish), rewrites report.md,
-   and emits stack.published with {"pull_requests": k}.
-
-Check: uv run pytest -q -m publish && uv run pytest -q
-Finish with a summary: files changed, tests passing, anything left undone.
-```
-
-## Then, for real (you)
+## Run it (you)
 
 ```bash
 cd ~/galaxium-travels
-cleave publish --base main
+cleave publish --base main            # the latest run; --run <id> for another
 cleave push --title "Loyalty tiers & seat upgrades" --pr 1 \
   --head-branch feat/loyalty-and-seat-upgrades --base-branch main --bob-stats bob-stats.json
 ```
 
-Re-pushing the same run replaces it, and the stack becomes **published**: the Published tab
-lists the PRs with links and refreshes CI badges while checks are pending.
+It prints one line per layer (`layer 1: #2 https://github.com/…/pull/2 (into main)`).
+Re-pushing the same run replaces it; the Published tab lists the PRs with links and
+refreshes CI badges while checks are pending.
+
+If a step fails halfway (for example `gh` isn't logged in after the push), fix it and run
+`cleave publish` again: the push is idempotent, and a layer branch that already has an open
+PR keeps it (its base is corrected if needed) instead of getting a second one.
 
 ## Done when (M2)
 
@@ -70,4 +56,4 @@ stack's Published tab shows them.
 
 ## Commit (you)
 
-`engine: publish stacks as chained pull requests (task10)` + the screenshot.
+Nothing new to commit (the code is in the pack); screenshot the Published tab for the video.

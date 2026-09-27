@@ -1,6 +1,6 @@
-# Status · 27 Sep 2026, 06:30 IST
+# Status · 27 Sep 2026, 08:20 IST
 
-Audited on `main` at `f03f2bd` plus this handoff pack. "Proven" means it was run, not read.
+This is `main` at `f7972b7` plus the phase 4–7 handoff pack. "Proven" means it was run, not read.
 
 ## The end-to-end flow
 
@@ -9,54 +9,77 @@ Galaxium PR ──cleave init──▶ Bob IDE (✂ Cleave) ──11 MCP tools�
      │                                                                         │
      │                                        guard / audit hooks ─ events ────┤
      ▼                                                                         ▼
- cleave publish ──gh──▶ stacked PRs + CI                          cleave push ──▶ web app: stack · proof · /results
+ cleave publish ──gh──▶ chained PRs + CI                          cleave push ──▶ web app: stack · proof · /results
+ cleave eval baseline ──▶ B1 measured as a run ─────────────────── cleave push --kind baseline_b1
+ cleave runner ◀── job queued in the browser ── claim · heartbeat · events · complete ──▶ stack
 ```
 
 | Step | State | Evidence |
 | --- | --- | --- |
-| Atomize, graph, plan, verify, report (task01–05) | **done, proven** | 114 unit specs green; Galaxium integration green with the backend's own tests |
-| MCP server (task06) | **done, fixed** | the real server, driven like Bob, split Galaxium PR #1: 15 atoms, 5 layers, 72/72/72/92/92 tests, top tree = head, 8 s |
-| Bob config: mode, hooks, rules (task07) | **done, fixed** | guard/audit specs green; `cleave init` merges into Galaxium's own `.bob/` |
-| `cleave push` → web | **done, proven** | the run above stored and rendered: stack, layers, verification, activity, proof, share image |
-| Web app (landing, proof, /results, runner endpoints, run page) | **done, proven locally** | typecheck, lint, build; local Postgres end-to-end |
+| Atomize, graph, plan, verify, report (task01–05) | **done, proven** | CI suite; the Galaxium integration run with the backend's own tests |
+| MCP server (task06) | **done, fixed again** | the server now runs over real stdio in a spec. The stdio bug (below) would have stopped M1 |
+| Bob config: mode, hooks, rules (task07) | **done** | guard/audit/init specs |
+| `cleave push` → web | **done, proven** | runs stored and rendered, now including runner and baseline runs |
+| Web app | **done, proven locally** | typecheck, lint and build pass; the pack adds editing a repository's run settings |
 | First run in Bob IDE (task08, M1) | **next** | needs the deployment and your Bob IDE |
-| B1 baseline (task09) | to build | brief + spec outline in `docs/tasks/phase-4/` |
-| Publish (task10, M2) | to build | spec `tests/test_publish.py` (-m publish), brief in `docs/tasks/phase-5/` |
-| Eval build + metrics (task11) | to build | spec `tests/test_eval.py` (-m eval), datasets chosen and checked in `eval/datasets.toml` |
-| Eval runs (task12, M3) | to run | runbook in `docs/tasks/phase-6/` |
-| Runner (task13, P1) | to build | spec `tests/test_runner.py` (-m runner); web side done |
+| B1 measurement (task09 Part A) | **done, proven** | `test_baselines.py` (9 cases); measured on real Galaxium branch stacks |
+| B1 runs + open checks (task09 B, C) | **to run** (you) | runbook in `docs/tasks/phase-4/` |
+| Publish (task10) | **done**; M2 **to run** (you) | `test_publish.py` (7 cases, reruns reuse open PRs); runbook in `docs/tasks/phase-5/` |
+| Eval build + metrics (task11) | **done, proven** | `test_eval.py` (7 cases); `eval/ground_truth/` for all 4 datasets, identical on rebuild |
+| Eval runs (task12, M3) | **to run** (you + Bob) | runbook in `docs/tasks/phase-6/` |
+| Runner (task13) | **done, proven with a stand-in bob**; real run **to do** (you) | `test_runner.py` (13 cases); a queued job was claimed and cloned from GitHub, verified 5/5 and stored |
 | Submission (Phase 8) | to do | checklist in `docs/tasks/phase-8/` |
 
-## Fixed since the audit started (each would have hurt M1)
+`uv run pytest -q` (the CI suite) now includes the publish, eval, runner and baseline specs:
+155 pass. It was also run from a clean copy with a fresh `uv sync`.
 
-Fixed by Bob in its task07 follow-up commits (`03c4a97` … `cd515fe`), from the Phase 3 briefs:
+## Fixed in the phase 4–7 pack (found by running things for real)
 
-1. **Bob couldn't finish:** the guard blocked `attempt_completion` and `ask_followup_question`.
-2. **Invalid hook matcher:** `settings.json` used `"matcher": "*"`, and in Bob the matcher is a regex on tool names.
-3. **Overwritten config:** `cleave init` replaced Galaxium's own modes, MCP servers and hooks, and edited its tracked `.gitignore`.
-4. **Wrong folder:** `cleave mcp` served whatever directory Bob started it in. `init` now writes `<full path to cleave> mcp --repo <repo>`.
+1. **`cleave mcp` couldn't work over stdio.** The repository path kept git's trailing
+   newline, so every tool call Bob made would fail with "No such file or directory". The old
+   specs called the server in-process, which is why it went unnoticed. A spec now starts
+   `cleave mcp --repo` as a subprocess and calls `cleave_start` over JSON-RPC.
+2. **Runner runs could never be stored.** MCP clients start servers with a reduced
+   environment, so `CLEAVE_RUN_ID` never reached `cleave mcp`, and the bundle's run id
+   wouldn't match the job. The runner now also writes `.cleave/run-id`, which `cleave_start`
+   uses once.
+3. **Check commands with quotes broke the config.** `cleave init --check '… -k "…"'` wrote
+   invalid TOML. Strings are now escaped, with a round-trip spec.
+4. **"No new code" counted missing code.** `foreign_lines` counted every difference from
+   the head, so a stack that left something out showed it as "new code". It now counts what
+   the schema says: lines the stack adds that the change doesn't. That matters for B1, which
+   often leaves parts out.
+5. **Parallel layers shared a temp dir and stdin.** Checks now get their own `TMPDIR` and a
+   closed stdin (under MCP stdio, stdin is Bob's JSON-RPC stream).
+6. **A setup that creates a venv wasn't used by the check.** The check's environment is now
+   computed after the setup runs. Runner jobs on a fresh clone need this.
+7. **`pytest -q` summaries weren't read.** Counts came out empty and the status was "error".
+8. **Flaky click tests in the eval datasets.** Two `test_echo_via_pager` cases race a pager
+   process and fail under parallel verification (5 of 6 concurrent runs). The dataset checks
+   leave them out, and the reason is in `eval/datasets.toml`.
+9. **Runner jobs had no setup.** A repository's run settings came only from the last pushed
+   run, and nothing let you set them. The repository page now edits them, and pushes merge
+   into them instead of wiping them.
 
-Fixed in this pack, with specs:
-
-5. **"No new code" measured nothing:** `foreign_lines` was hard-coded to 0.
-6. **A refused start locked the repo:** a failed `cleave_start` left `.cleave/active`, locking edits in every mode.
-7. **Long rounds timed out:** `cleave_verify` couldn't outlive Bob's ~60 s MCP timeout. It now answers `pending`, and Bob polls.
-8. **Reverted-looking changes:** the split used `base..head`. It now uses the merge base, like a pull request, so work that lands on `main` later (the CI workflow in Phase 5) never shows up as a reverted change.
-9. **Confusing Activity tab:** it showed tool arguments as event titles, and Bob's counts were blank when Bob didn't report them. Both now come from the run's own events.
-10. **Hook events leaked contents:** they carried full file contents. They now record the path, command or server only. The guard finds the repo via git.
-11. **Docs could drift:** `/docs/bob` is now generated from the shipped config (`npm run contracts`).
+Fixed earlier (the audit pack, and Bob's task07 follow-ups): the guard allowing
+questions/completion, the hook matcher, `init` merging config, `mcp --repo`, measured
+foreign lines, safe start, background verify, the merge-base split, the Activity tab, hook
+events without contents, and generated `/docs/bob`.
 
 ## Still open
 
-- **C1/C3:** `tests/payloads/` is hand-written. task08's step 9 reads the real tool names from the run.
-- **C2, C4, C5, C6:** answered in task09.
-- **Fork CI:** the Galaxium fork has no test workflow and its Bob Review workflow needs a key
-  the fork doesn't have. Fork prep is task08's step 0 (`docs/tasks/phase-5/`).
+- **C1/C3:** `tests/payloads/` is hand-written. task08's step 9 reads the real tool names.
+- **C2, C4, C5, C6:** answered in task09 Part C. C4 decides whether the runner's
+  `bob run --mode cleave` loads the mode.
+- **Proof page and B1:** PR baselines are stored with their stack but only `/results` shows
+  B1 next to Cleave. Showing B1 on the proof page is optional
+  (`docs/tasks/phase-8/optional-b1-on-proof.md`).
 - **Placeholders:** the two landing screenshots (Phase 8).
 
 ## What only you can do
 
-1. Deploy (`docs/tasks/deploy.md`): Vercel + Neon + GitHub OAuth app + env vars, then a runner token.
-2. Run Bob IDE for task08 and every later Bob task; save each task-summary screenshot.
-3. Fork prep on GitHub (workflow, disable Bob Review, merge `main` into the PR branch) and `gh auth login`.
+1. Deploy (`docs/tasks/deploy.md`), then create a runner token.
+2. Run Bob IDE for task08, task12 and the real runner run. Save each summary screenshot:
+   these, plus the B1 streams, are the `bob_sessions/` evidence.
+3. Fork prep on GitHub, then `gh auth login` and `gh auth setup-git`.
 4. The video, cover, slides and the lablab submission.

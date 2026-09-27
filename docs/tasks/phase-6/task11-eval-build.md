@@ -1,63 +1,50 @@
-# task11 · constructed diffs and metrics
+# task11 · constructed diffs and metrics — done
 
-**Phase 6** (11:45–12:30) · **Budget:** ~2 Bobcoins · **Evidence:** `bob_sessions/SsnFall_task11_eval-build_summary.png`
+**Phase 6** (11:45–12:30) · **Budget:** 0 Bobcoins
 
-The datasets are chosen and checked already: `eval/datasets.toml` lists four windows of
-real commits (three from `pallets/click`, one from the Galaxium fork), each with its base,
-commits, paths, setup and check command. For every one, the tests pass at the base and at
-the constructed head.
+Done in the handoff pack. The spec is `tests/test_eval.py` (7 cases, in CI). The ground truth for all four datasets is in `eval/ground_truth/`.
 
-## Brief for Bob (Code mode, Cleave repository)
+- `cleave eval build --datasets eval/datasets.toml --workdir DIR [--only NAME…]` clones each
+  dataset's repository into `DIR/<repo>` if needed and fetches the commits. It then builds
+  `cleave-eval/<name>`: one commit on the dataset's base whose tree takes `paths` from the
+  last commit. The build uses git plumbing only, with a fixed author, committer and dates.
+  The same inputs always give the same sha, and HEAD and the working tree are never touched.
+- The command writes `eval/ground_truth/<name>.json`: `{dataset, repo, base, head, branch,
+  commits, atoms: {atom_id: original commit}}`. Each atom is attributed to the earliest
+  replayed commit that produced it:
+  - blame for added lines,
+  - reverse blame for removed lines,
+  - the commit that created, deleted or renamed the file, for whole-file atoms.
+- `cleave eval metrics [--run ID] [--ground-truth FILE]` prints the /results metrics as JSON:
+  - `valid`: all five checks pass and every layer is green;
+  - `green`, `layers`, `foreign_lines`, `largest_layer`;
+  - `agreement`: the Rand index against the original commits.
 
-```
-Task 11: build constructed diffs with ground truth, and compute run metrics.
+Built here on 27 Sep (identical on a rebuild):
 
-Read AGENTS.md §1, the docstrings in packages/engine/src/cleave/eval/build_dataset.py and
-eval/metrics.py, the spec packages/engine/tests/test_eval.py, and eval/datasets.toml.
-
-Change only:
-- packages/engine/src/cleave/eval/build_dataset.py
-- packages/engine/src/cleave/eval/metrics.py
-- packages/engine/src/cleave/cli.py      (`cleave eval build`, `cleave eval metrics`)
-- packages/engine/pyproject.toml         (drop `and not eval` from the default markers once green)
-
-Requirements:
-1. load_datasets(path): read [[datasets]] with tomllib into Dataset objects.
-2. build(repo, dataset): with a temporary GIT_INDEX_FILE, make the tree = dataset.base's tree
-   with each of dataset.paths taken from the last commit (all of it when paths is empty);
-   commit it with parent = base and fixed author/committer/date (so building twice gives
-   the same sha); update-ref refs/heads/cleave-eval/<name>. Never touch HEAD or the
-   working tree.
-3. Ground truth: replay the commits one at a time (same path limit) as a private chain of
-   commits; atomize base..head; each atom belongs to the first step whose diff touches the
-   atom's file and line range (a new-file atom: the step that created the file). Return
-   {atom_id: original commit sha} for every atom.
-4. metrics(report, ground_truth): valid (all five checks pass and every layer green), green,
-   layers, foreign_lines, largest_layer (added + removed), agreement = Rand index over atom
-   pairs (None without ground truth).
-5. `cleave eval build --datasets eval/datasets.toml --workdir DIR [--only NAME]`: clone each
-   dataset's repo into DIR/<repo-name> if missing (`git clone`, then fetch the commits),
-   build its branch, and write eval/ground_truth/<name>.json (next to datasets.toml) as
-   {"dataset", "base", "head", "commits", "atoms": {atom_id: sha}}. Print one line per dataset.
-6. `cleave eval metrics --run ID [--ground-truth FILE]` prints the metrics as JSON.
-
-Check: uv run pytest -q -m eval && uv run pytest -q
-Finish with a summary: files changed, tests passing, anything left undone.
-```
+| Dataset | Head | Atoms by original commit |
+| --- | --- | --- |
+| click-completions | `dc3dbd0acf58` | 108 (32 · 8 · 68) |
+| click-deprecated-params | `0286eba0d93b` | 51 (28 · 13 · 3 · 7) |
+| click-nosuchcommand | `f42c059db927` | 116 (15 · 43 · 44 · 14) |
+| galaxium-lint-pass | `4886726a6c09` | 58 (49 · 7 · 2) |
 
 ## Then (you)
 
 ```bash
 cd ~/Desktop/Cleave
 cleave eval build --datasets eval/datasets.toml --workdir ~/cleave-eval
-ls eval/ground_truth/          # one JSON per dataset
+git diff --stat eval/ground_truth/     # empty: your build matches the committed ground truth
 ```
 
-## Done when
+This clones `pallets/click` and the Galaxium fork into `~/cleave-eval` (a minute), and
+leaves the four `cleave-eval/*` branches there for task12.
 
-`uv run pytest -q` is green with the eval specs in it, and `eval/ground_truth/` has a file
-per dataset whose head sha matches the `cleave-eval/<name>` branch in `~/cleave-eval`.
+## Note on the click checks
 
-## Commit (you)
-
-`engine: constructed diffs, ground truth and metrics (task11)` and `eval: ground truth for the datasets`.
+The click check commands leave out two cases of `test_echo_via_pager` (the two "Exception in
+generator …" cases, `test5`/`test6`, which run once per pager). They race the pager process
+against the generator's exception. That makes them fail whenever two test runs share the
+machine, and Cleave's verification runs layers in parallel. With those cases in, 2
+concurrent runs of the same head failed 5 times out of 6. Without them, 21 of 21 passed. The
+exact command is in `eval/datasets.toml`.
