@@ -56,49 +56,51 @@ Cleave/
 ├── .github/workflows/ci.yml          ● engine pytest (unit specs) + web contracts/typecheck/lint/build
 ├── schemas/                          ● atom, graph, plan, report, event, bundle, job (.schema.json)
 ├── demo/galaxium.md                  ● the demo PR (edish-github/galaxium-travels #1) and how to rerun it
+├── demo/runs/                        ○ bundle of the M1 run (task08)
+├── docs/STATUS.md                    ● what's done, proven, open and next
+├── docs/tasks/                       ● one brief per remaining task (README lists the order), deploy.md
 ├── bob_sessions/                     ○ SsnFall_taskNN_<desc>_summary.png, one per Bob task (§6)
-├── eval/                             ○ Phases 4 and 6
-│   ├── datasets.yaml                 ○   constructed diffs: source repo, commits, name
+├── eval/                             Phases 4 and 6
+│   ├── datasets.toml                 ●   four constructed diffs (click ×3, Galaxium), checked
 │   ├── ground_truth/<dataset>.json   ○   which atoms came from which original commit
 │   ├── baselines/                    ○   B1 stats and notes from Phase 4
 │   ├── open-checks.md                ○   results of C1–C6 (§5, Phase 4)
 │   └── runs/<dataset>/{cleave,baseline_b1}.bundle.json.gz   ○ committed bundles
 ├── asset/                            ○ slides, cover, video stills (Phase 8)
 ├── packages/engine/                  Python 3.11, uv
-│   ├── pyproject.toml                ● console script `cleave`; markers integration, bob
+│   ├── pyproject.toml                ● console script `cleave`; default pytest run = CI suite
 │   ├── src/cleave/
 │   │   ├── models.py config.py runs.py events.py push.py cli.py   ● done
-│   │   ├── gitio.py atomize.py build.py                            ◐ Phase 2 · task01
-│   │   ├── graph/{__init__,python_ast,pytest_fixtures,files}.py    ◐ Phase 2 · task02
-│   │   ├── plan.py                                                 ◐ Phase 2 · task03
-│   │   ├── verify.py                                               ◐ Phase 2 · task04
-│   │   ├── report.py                                               ◐ Phase 2 · task05
-│   │   ├── slices.py mcp_server.py                                 ◐ Phase 3 · task06
-│   │   ├── bob_config/                                             ◐ Phase 3 · task07
+│   │   ├── gitio.py atomize.py build.py                            ● Phase 2 · task01
+│   │   ├── graph/{__init__,python_ast,pytest_fixtures,files}.py    ● Phase 2 · task02
+│   │   ├── plan.py                                                 ● Phase 2 · task03
+│   │   ├── verify.py                                               ● Phase 2 · task04
+│   │   ├── report.py                                               ● Phase 2 · task05
+│   │   ├── slices.py mcp_server.py                                 ● Phase 3 · task06
+│   │   ├── bob_config/                                             ● Phase 3 · task07
 │   │   │   ├── custom_modes.yaml mcp.json settings.json
 │   │   │   ├── hooks/{guard,audit}.py
 │   │   │   └── rules-cleave/{01-procedure,02-plan-schema,03-repair}.md
 │   │   ├── baselines.py                                            ◐ Phase 4 · task09
-│   │   ├── publish.py                                              ◐ Phase 5 · task10
-│   │   ├── eval/{build_dataset,metrics}.py                         ◐ Phase 6 · task11
+│   │   ├── publish.py                                              ◐ Phase 5 · task10, spec: test_publish.py
+│   │   ├── eval/{build_dataset,metrics}.py                         ◐ Phase 6 · task11, spec: test_eval.py
 │   │   ├── runner/{client,job,bobshell}.py                         ◐ Phase 7 · task13 (P1), spec: test_runner.py
 │   │   └── describe.py                                             ◐ P2 (watsonx.ai), cut first
 │   └── tests/
 │       ├── conftest.py               ● `make_repo`: a small git repo with a realistic PR
-│       ├── test_models.py            ● green
-│       ├── test_atomize_build.py test_graph.py test_plan.py test_verify.py test_report.py
-│       │                             ◐ red specs for Phase 2
-│       ├── test_mcp.py test_hooks.py ◐ red specs for Phase 3
-│       ├── test_runner.py            ◐ red spec for Phase 7 (runner protocol, client side)
-│       ├── test_galaxium.py          ◐ integration, needs GALAXIUM_REPO
-│       ├── test_publish.py           ○ Phase 5 (Bob writes it, §5)
-│       ├── test_eval.py              ○ Phase 6 (Bob writes it, §5)
-│       └── payloads/*.json           ○ real Bob hook payloads, Phase 3 (open checks C1, C3)
+│       ├── test_models.py test_atomize_build.py test_graph.py test_plan.py
+│       │   test_verify.py test_report.py test_mcp.py test_hooks.py test_init.py   ● green (the CI suite)
+│       ├── test_galaxium.py          ● integration, needs GALAXIUM_REPO
+│       ├── test_baselines.py         ○ Phase 4 (Bob writes it, task09)
+│       ├── test_publish.py           ◐ red spec, -m publish (task10)
+│       ├── test_eval.py              ◐ red spec, -m eval (task11)
+│       ├── test_runner.py            ◐ red spec, -m runner (task13)
+│       └── payloads/*.json           ◐ hand-written; replace from task08's real run (C1, C3)
 └── apps/web/                         Next.js 16, see apps/web/README.md
     ├── src/app/                      routes; (public) group: landing, docs, login, results
     ├── src/services/                 `api` → live (Postgres) or sample client
     ├── src/server/                   db, auth, ingest, runner tokens, github.ts, actions
-    ├── src/content/bob.ts            text of the shipped Bob files shown on /docs/bob
+    ├── src/content/bob.generated.ts  the shipped Bob config, generated by `npm run contracts`
     ├── src/lib/assets.ts             two landing screenshots (placeholders until Phase 8)
     ├── drizzle/                      SQL migrations
     └── test/fixtures/sample-bundle.json   a bundle for testing ingest without the engine
@@ -141,7 +143,8 @@ tokens come from the deployed app: Settings → Bob & runners → Create token. 
 
 | Tier | Command (from the package) | Runs in CI | When |
 | --- | --- | --- | --- |
-| Engine unit specs | `uv run pytest -q -m "not integration and not bob and not runner"` | yes | every engine task |
+| Engine unit specs (the CI suite) | `uv run pytest -q` | yes | every engine task |
+| A phase's red specs | `uv run pytest -q -m publish` / `-m eval` / `-m runner` | no | that phase's task |
 | One spec file | `uv run pytest -q tests/test_graph.py` | — | while working on a task |
 | Galaxium integration | `GALAXIUM_REPO=~/galaxium-travels uv run pytest -q -m integration` | no | end of Phase 2, before M1 |
 | … with the backend's tests | add `GALAXIUM_VERIFY=1` (needs its requirements installed) | no | end of Phase 2 |
@@ -152,8 +155,9 @@ tokens come from the deployed app: Settings → Bob & runners → Create token. 
 | Web | `npm run typecheck && npm run lint && npm run build` | yes | every web change |
 | Ingest end to end | `cleave push …` to a local or deployed app (below) | no | Phase 3 onward |
 
-**CI is expected to be red on the engine job until Phase 3 is done**: the red specs are the
-to-do list. The web job must stay green at all times.
+`uv run pytest -q` runs the CI suite: `pyproject.toml` deselects `integration`, `bob`,
+`runner`, `publish` and `eval` by default (a later `-m` wins). When a phase's task lands,
+it removes its marker from that default, so its specs join CI. Both CI jobs stay green.
 
 Engine → web check without Bob (works today): take any finished run directory and push it.
 
@@ -192,7 +196,7 @@ Each Bob task below lists: **Files** (the only files to change), **Spec** (tests
 turn green), **Check** (the command to run before finishing) and **Done when**.
 Use Bob's **Code** mode for engine tasks and **✂ Cleave** for runs.
 
-### Phase 2 — engine core (03:00–06:00, 10 coins)
+### Phase 2 — engine core (03:00–06:00, 10 coins) — done
 
 **task01 · git plumbing, atoms and rebuild**
 - Files: `gitio.py`, `atomize.py`, `build.py`, `cli.py` (wire `cleave build`)
@@ -237,7 +241,7 @@ Use Bob's **Code** mode for engine tasks and **✂ Cleave** for runs.
 **task05 · report, and the real demo diff**
 - Files: `report.py`
 - Spec: `tests/test_report.py`, then `tests/test_galaxium.py`
-- Check: `uv run pytest -q -m "not integration and not bob and not runner"` (only `test_mcp.py` and
+- Check: `uv run pytest -q` (only `test_mcp.py` and
   `test_hooks.py` may still fail), then
   `GALAXIUM_REPO=~/galaxium-travels GALAXIUM_VERIFY=1 uv run pytest -q -m integration`
 - Done when: a verified run has the five checks passing in order; layers carry branch, tree
@@ -249,123 +253,23 @@ Use Bob's **Code** mode for engine tasks and **✂ Cleave** for runs.
 Fallback if tests are still red at 05:30: ship the Python-AST and file-order graph, move M1
 to 10:45 and cut Phase 7.
 
-### Phase 3 — Bob mode and the first real run (06:00–07:30, 5 coins)
+### Phases 3–8: briefs in `docs/tasks/`
 
-**task06 · slices and the MCP server**
-- Files: `slices.py`, `mcp_server.py`
-- Spec: `tests/test_mcp.py` (tool names, descriptions, propose/move, untouched tree)
-- Check: `uv run pytest -q tests/test_mcp.py -k "not shipped"`
-- Done when: the eleven tools in `TOOL_NAMES` are served over stdio by `cleave mcp`, each
-  call logs `mcp.called`, and `cleave_verify` returns `pending` after 50 s with
-  `cleave_verify_status` to poll.
+Every remaining task has its own file: a **Brief for Bob** to paste into Bob IDE where Bob
+builds something, and a runbook for the parts you run. Order and times:
+[`docs/tasks/README.md`](docs/tasks/README.md). Current state: [`docs/STATUS.md`](docs/STATUS.md).
 
-**task07 · the shipped Bob config**
-- Files: everything under `bob_config/` (see `bob_config/README.md`)
-- Start from: the text on `/docs/bob` (`apps/web/src/content/bob.ts`); keep both identical
-- Spec: `tests/test_mcp.py` (`shipped` cases), `tests/test_hooks.py`
-- Check: `uv run pytest -q -m "not integration and not bob and not runner"`, all green
-- Done when: the mode has groups `[read, mcp, subagent, todo]` only; `mcp.json` allows exactly
-  `TOOL_NAMES`; the guard allows reads, explore subagents, todos and `cleave_*` calls while
-  `.cleave/active` exists and exits 2 on anything else; the audit hook logs every call.
-
-**task08 · first ✂ Cleave run on Galaxium → M1** (✂ Cleave mode)
-1. In `~/galaxium-travels`: create `booking_system_backend/.venv` with the requirements and
-   `mcp<2`, then `cleave init --check "pytest -q" --workdir booking_system_backend`
-   (exact commands and why in `demo/galaxium.md`; no `--setup`, verification reuses the venv).
-2. Reload Bob IDE, switch to ✂ Cleave, send: `Cleave feat/loyalty-and-seat-upgrades onto main`.
-3. Let it run red → green (≤ 3 repair rounds). Take the task summary screenshot.
-4. Save 3+ real hook payloads to `packages/engine/tests/payloads/` and note how MCP calls
-   are named in them (open checks C1, C3). Run `uv run pytest -q -m bob`.
-5. Write the Bob stats from the task summary into `bob-stats.json`
-   (`{"surface": "ide", "mode": "cleave", "bobcoins": …, "duration_ms": …}`), then
-   `cleave push --title "Loyalty tiers & seat upgrades" --pr 1 --head-branch feat/loyalty-and-seat-upgrades --base-branch main --bob-stats bob-stats.json`
-6. Open the stack in the app → Share proof → public. Open `/proof/<id>` signed out.
-- Done when (**M1**): the public proof shows the real layers, all five checks, and the hook
-  audit shows 0 blocked writes to source.
-
-Web side of Phase 3: Activity, hook audit table, Bob stats card, share image and the
-failed-run state are built. After task07, check `/docs/bob` still matches `bob_config/`.
-
-### Phase 4 — baselines and open checks (10:00–10:45, 6 coins)
-
-**task09 · B1 baseline**
-- Files: `baselines.py`, `cli.py` (`cleave eval baseline`), `eval/baselines/`, `eval/open-checks.md`
-- Do: run the one-prompt baseline twice with `bob run --mode agent --max-cost 3` on the demo
-  PR; measure foreign lines, green layers and top-tree drift with the engine; save each run's
-  stats as `eval/baselines/b1-run1.json` and `b1-run2.json`.
-- Answer in `eval/open-checks.md`, one line each with the evidence: C2 (Bob API key for a
-  hosted runner), C4 (`bob run --mode cleave` loads the project mode and `.bob/mcp.json`;
-  else `--chat-mode=cleave`), C5 (subagent events in `stream-json`), C6 (`gh-stack` on the
-  fork; else chained `--base`).
-- Done when: both B1 runs are recorded and pushed with `--kind baseline_b1`.
-
-### Phase 5 — publish (10:45–11:45, 1 coin)
-
-**task10 · stacked pull requests → M2**
-- Files: `publish.py`, `cli.py` (wire `cleave publish`), new `tests/test_publish.py`
-- Spec (write it first, small): branches are named `cleave/<slug>/<n>`; with a local bare repo
-  as `origin`, `method="branches"` pushes every layer branch and returns a `Publish` record;
-  `method="auto"` picks `gh-stack` when installed, else chained `gh pr create --base`.
-- Check: `uv run pytest -q tests/test_publish.py`, then `cleave publish` on the demo run and
-  `cleave push` again so the Published tab shows the PRs.
-- Done when (**M2**): the stacked PRs are open on the fork, each green in Actions, and the
-  Published tab shows them with CI badges.
-
-### Phase 6 — evaluation (11:45–13:45, 10 coins)
-
-**task11 · constructed diffs and metrics**
-- Files: `eval/build_dataset.py`, `eval/metrics.py`, `cli.py` (`cleave eval build|metrics`),
-  `eval/datasets.yaml`, new `tests/test_eval.py`
-- Do: squash 3–5 consecutive real commits of a public Python repo with a fast pytest suite
-  into one branch `cleave-eval/<dataset>`; write `eval/ground_truth/<dataset>.json` mapping
-  each atom to its original commit. Metrics: valid stack, green k/k, foreign lines, drift,
-  largest layer, agreement with ground truth.
-- Check: `uv run pytest -q tests/test_eval.py` (build on `make_repo` with three commits).
-
-**task12 · evaluation runs → M3** (✂ Cleave and `bob run`)
-- For each dataset (3 minimum, 6 at most): one B1 run and one Cleave run, then
-
-  ```bash
-  cleave push --title "<dataset>" --kind cleave --eval-group constructed --dataset <dataset> \
-    --ground-truth eval/ground_truth/<dataset>.json --bob-stats bob-stats.json \
-    --out eval/runs/<dataset>/cleave.bundle.json.gz
-  # same with --kind baseline_b1 and …/baseline_b1.bundle.json.gz
-  ```
-- Done when (**M3**): `/results` shows at least 3 rows with both runs, each linking to a
-  public proof, and the bundles are committed under `eval/runs/`.
-
-If Bobcoins run low: use the 5 held back and stop at 3 datasets.
-
-### Phase 7 — live runner (13:45–15:00, 3 coins, P1: cut first)
-
-The web side is built: `schemas/job.schema.json`, the `jobs` and `job_events` tables,
-`POST /api/runner/claim` (25 s long poll → Job or 204), `/api/runner/heartbeat` (409 when
-its `job_id` is no longer running), `/api/runner/runs/:id/events` (NDJSON of events) and
-`/api/runner/runs/:id/complete` (bundle → stored like `cleave push`, or a failure reason).
-New split queues a run ("Run on …"), `/app/runs/:id` shows it and refreshes every 2 s,
-and it can be cancelled there. Server code: `apps/web/src/server/jobs.ts`.
-
-**task13 · the runner**
-- Files: `runner/client.py`, `runner/bobshell.py`, `runner/job.py`, `cli.py` (wire
-  `cleave runner`, reading `CLEAVE_URL` and `CLEAVE_TOKEN`), and `mcp_server.py` /
-  `runs.py` so a run started with `CLEAVE_RUN_ID` set uses it as its run id
-- Spec: `tests/test_runner.py` (client against a mock web app, the `bob run` command,
-  checkout with the job's config, failure and cancel paths). Needs task07's `bob_config/`.
-- Check: `uv run pytest -q -m runner`, then for real: `cleave runner` on your
-  machine, New split → Run on <your runner> on the demo PR.
-- Done when: a run queued in the browser is claimed by your machine, its events appear on
-  the run page while it runs, and "Open the stack" leads to the finished stack.
-
-### Phase 8 — submission (15:00–18:00)
-
-- [ ] Replace the two placeholder screenshots in `apps/web/src/lib/assets.ts` with real ones
-      in `apps/web/public/images/` (stack overview 2400×1500, Bob IDE in ✂ Cleave 1200×900).
-- [ ] `bob_sessions/` has one summary screenshot per Bob task, named per §6.
-- [ ] README: summary, evidence table (M1–M3 links, `/results`, bob_sessions), reproduce steps.
-- [ ] Deployed app: landing links the live proof; `/results` has ≥ 3 rows; every link opens signed out.
-- [ ] Video under 3 minutes, at least 90 s of the product running (M1 run, proof, `/results`).
-- [ ] Slides, cover image and statements in `asset/`.
-- [ ] Final `git status` clean, CI green on `main`.
+| Task | File | Spec | Done when |
+| --- | --- | --- | --- |
+| task06 MCP server | [phase-3/task06](docs/tasks/phase-3/task06-mcp-server.md) | `test_mcp.py` | done |
+| task07 Bob config | [phase-3/task07](docs/tasks/phase-3/task07-bob-config.md) | `test_hooks.py`, `test_init.py` | done |
+| task08 first run | [phase-3/task08](docs/tasks/phase-3/task08-first-run.md) | — | **M1**: public proof of a real ✂ Cleave run, 0 blocked writes |
+| task09 B1 baseline | [phase-4/task09](docs/tasks/phase-4/task09-baselines.md) | `test_baselines.py` (Bob writes) | two B1 runs pushed; C1–C6 answered |
+| task10 publish | [phase-5/task10](docs/tasks/phase-5/task10-publish.md) | `test_publish.py` | **M2**: stacked PRs on the fork, green, on the Published tab |
+| task11 eval build | [phase-6/task11](docs/tasks/phase-6/task11-eval-build.md) | `test_eval.py` | ground truth for every dataset |
+| task12 eval runs | [phase-6/task12](docs/tasks/phase-6/task12-eval-runs.md) | — | **M3**: `/results` with ≥ 3 rows |
+| task13 runner (P1) | [phase-7/task13](docs/tasks/phase-7/task13-runner.md) | `test_runner.py` | a browser-started run finishes on your machine |
+| submission | [phase-8/submission](docs/tasks/phase-8/submission.md) | — | **M4**: video, assets, submitted |
 
 Never cut: the Bob IDE run, `/proof/:stackId`, `/results` with ≥ 3 diffs, `bob_sessions/`,
 the video. Cut in this order when late: Phase 7, P2 work (`describe.py`, webhooks),
@@ -378,7 +282,7 @@ the video. Cut in this order when late: Phase 7, P2 work (`describe.py`, webhook
 | What | Where | Name |
 | --- | --- | --- |
 | Bob task summary (every Bob task, required by the rules) | `bob_sessions/` | `SsnFall_taskNN_<short-kebab-description>_summary.png` |
-| Real hook payloads | `packages/engine/tests/payloads/` | `pre-<tool>.json`, `post-<tool>.json` |
+| Real hook payloads | `packages/engine/tests/payloads/` | `pre-<tool>.json` (from task08's run, step 9) |
 | B1 baseline stats | `eval/baselines/` | `b1-run1.json`, `b1-run2.json` |
 | Open checks C1–C6 | `eval/open-checks.md` | one line per check with its evidence |
 | Evaluation bundles | `eval/runs/<dataset>/` | `cleave.bundle.json.gz`, `baseline_b1.bundle.json.gz` |
@@ -393,10 +297,12 @@ in the same commit as the code the task produced.
 ## 7. Git
 
 - Work on `main` in small commits; each commit leaves the web job green.
+- Commits go in under the team's own git identity, with plain messages: no co-author
+  trailers from any agent. Outside agents hand over zips and task briefs; the team commits.
 - Commit messages start with the area: `engine:`, `web:`, `schemas:`, `eval:`, `docs:`,
   `evidence:`. Example: `engine: atomize and rebuild (task01)`.
-- Never commit `.env*.local`, `.cleave/runs/` or tokens. `cleave init` adds `.cleave/runs/`
-  and `.cleave/active` to the target repository's `.gitignore`.
+- Never commit `.env*.local`, `.cleave/runs/` or tokens. `cleave init` ignores run output
+  through `.cleave/.gitignore` and never edits the target repository's own `.gitignore`.
 - The `cleave/*` branches in the demo fork are build output; don't edit them by hand.
 
 ---

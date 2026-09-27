@@ -1,0 +1,25 @@
+# Copy to the Galaxium fork as .github/workflows/backend-tests.yml (on main).
+# Runs the backend suite on every pull request, including PRs whose base is another
+# cleave/* layer branch, so each layer of a published stack shows its own CI result.
+name: Backend tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pytest:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: booking_system_backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+      # fastapi-mcp 0.4 breaks with mcp 2.x; the backend's requirements aren't pinned.
+      - run: uv venv .venv && uv pip install --python .venv -r requirements.txt "mcp<2"
+      - run: .venv/bin/python -m pytest -q

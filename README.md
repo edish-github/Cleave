@@ -55,9 +55,8 @@ each phase is tested, is in [`AGENTS.md`](AGENTS.md).
 
 ## Status
 
-Built for the IBM Bob Hackathon (lablab.ai, September 2026). The web frontend and contracts
-are complete; the engine is being built in Bob IDE against the specs in
-`packages/engine/tests/`.
+Built for the IBM Bob Hackathon (lablab.ai, September 2026). What's done, proven and next:
+[`docs/STATUS.md`](docs/STATUS.md). Remaining work, one brief per task: [`docs/tasks/`](docs/tasks/).
 
 ## License
 
