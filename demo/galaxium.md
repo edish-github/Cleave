@@ -11,6 +11,8 @@ The demo splits a real pull request on a public fork of IBM's Galaxium Travels s
 | Head SHA | `99ab7d49de5258cfa504eea0639dddee901db4d9` |
 | Size | 11 files, +1,032 −2 |
 | Check command | `pytest -q` in `booking_system_backend/` |
+| Public proof (M1) | [cleave-sable.vercel.app/proof/galaxium-travels-1](https://cleave-sable.vercel.app/proof/galaxium-travels-1) |
+| Stacked PRs (M2) | [PR #2](https://github.com/edish-github/galaxium-travels/pull/2) · [PR #3](https://github.com/edish-github/galaxium-travels/pull/3) · [PR #4](https://github.com/edish-github/galaxium-travels/pull/4) · [PR #5](https://github.com/edish-github/galaxium-travels/pull/5) · [PR #6](https://github.com/edish-github/galaxium-travels/pull/6) |
 
 ## Reproduce
 
