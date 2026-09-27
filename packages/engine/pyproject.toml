@@ -34,5 +34,8 @@ markers = [
   "integration: needs a local clone of the Galaxium fork (set GALAXIUM_REPO)",
   "bob: needs real Bob hook payloads in tests/payloads (open check C1)",
   "runner: Phase 7 (P1) runner specs, run with -m runner",
+  "publish: Phase 5 publish specs (task10), run with -m publish",
+  "eval: Phase 6 evaluation specs (task11), run with -m eval",
 ]
-addopts = "-ra"
+# The default run is the CI suite. Phase-gated specs run with -m <marker> (the last -m wins).
+addopts = "-ra -m 'not integration and not bob and not runner and not publish and not eval'"

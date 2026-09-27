@@ -1,0 +1,68 @@
+# Constructed diffs for /results (Phase 6).
+#
+# Each dataset squashes the `paths` changes of 3-4 consecutive code commits of a public
+# repository into one commit on top of `base` (the parent of the first commit), with the
+# original commits kept as ground truth. Built by `cleave eval build` (task11).
+#
+# Checked on 2026-09-27: the check command passes at `base` and at the constructed head
+# with the setup below. click is BSD-3-Clause licensed; Galaxium Travels is IBM's public
+# Bob demo application (fork: edish-github/galaxium-travels).
+
+[[datasets]]
+name = "click-completions"
+repo = "https://github.com/pallets/click"
+base = "9982faee85f2715a9cde03639f8c0382561c09ce"
+commits = [
+  "f14b75063fb36b9208b13a920326926363616b39",  # update dev dependencies
+  "a1235aacb1be55dc66ddcfefbf64dec44b6ab54d",  # Fix Zsh completions with colons (#2846)
+  "701b313160be12752e49b3f7cea32402c0969a69",  # Fix completions for quoted/escaped parameters in Fish (#3013)
+]
+paths = ["src", "tests"]
+setup = 'uv venv .venv --python 3.11 && uv pip install --python .venv "pytest<8.4"'
+check = "PYTHONPATH=src python -m pytest -q -p no:cacheprovider"
+# constructed diff: 19 files, +812 -131; tests at head: 902 passed
+
+[[datasets]]
+name = "click-deprecated-params"
+repo = "https://github.com/pallets/click"
+base = "2cabbe3175026695210fe0bf9b179fd62d52634f"
+commits = [
+  "3b06e0b75aaa68533c7fbd4f89053309f2e4ed8a",  # Improve echo_via_pager behaviour in face of errors (#2775)
+  "5961d31fb566f089ad468a5b26a32f1ebfa7f63e",  # Introduce Parameter.deprecated + Command.deprecated message customization
+  "88328fc8743d43566081d9f17acad5f5552f5a87",  # Add CliRunner default `catch_exceptions` parameter (#2818)
+  "b5464b7e065bdfd952b1532880941f1be07e4e2b",  # Only try to set flag_value if is_flag is true (#2829)
+]
+paths = ["src", "tests"]
+setup = 'uv venv .venv --python 3.11 && uv pip install --python .venv "pytest<8.4"'
+check = "PYTHONPATH=src python -m pytest -q -p no:cacheprovider"
+# constructed diff: 10 files, +417 -55; tests at head: 626 passed
+
+[[datasets]]
+name = "click-nosuchcommand"
+repo = "https://github.com/pallets/click"
+base = "ddede2147c9370ab8275f81db4826b6895d2e7dc"
+commits = [
+  "2468b70997a6ec27ced4b4867954c90da3f92075",  # Fix readline backspace/line-wrapping on linux (#2969)
+  "19fd4d6e18bc9fce451f92f422696b11169faa57",  # Fix: Ensure fish completion handles multiline help strings correctly
+  "831c8f0948af519e45b90801d7430ff25451f972",  # Add NoSuchCommand exception with suggestions for misspelled commands
+  "fc6c7c47edd6110b6bd5a1a5297b2035214b0cd1",  # `FuncParamType` should use `ValueError` message in `self.fail()`
+]
+paths = ["src", "tests"]
+setup = 'uv venv .venv --python 3.11 && uv pip install --python .venv "pytest<8.4"'
+check = "PYTHONPATH=src python -m pytest -q -p no:cacheprovider"
+# constructed diff: 19 files, +449 -189; tests at head: 1494 passed
+
+[[datasets]]
+name = "galaxium-lint-pass"
+repo = "https://github.com/edish-github/galaxium-travels"
+base = "e668e44849c7b15be77563872512de0c3a3cb1bb"
+commits = [
+  "973ac336d192f2315a2558c685b7d19a40a95e01",  # A bunch of automated fixes created by "ruff check --fix"
+  "2660c81a7d1baebe6e40936ab832b4bf152763cd",  # chore: fix ruff lint warnings
+  "628c4cdd816edf292f0b081a916cd5083f022966",  # minor improvements
+]
+paths = ["booking_system_backend"]
+working_directory = "booking_system_backend"
+setup = 'uv venv .venv --python 3.11 && uv pip install --python .venv -r requirements.txt "mcp<2"'
+check = "python -m pytest -q"
+# constructed diff: 14 files, +117 -95 (under the 400-line threshold: optional 4th row); tests: 72 passed
