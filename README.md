@@ -118,7 +118,7 @@ To evaluate whether Cleave outperforms unaided agent workflows, we compared Clea
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | **click-deprecated-params**<br>`pallets/click` · 472 lines | **Cleave**<br>Bob Alone (B1) | **Valid ✅**<br>Invalid ❌ | **3 / 3**<br>1 / 2 | **0**<br>0 | **220**<br>298 | **1.40**<br>1.90 | [Proof](https://cleave-sable.vercel.app/proof/click-0286eba) |
 | **click-completions**<br>`pallets/click` · 1,055 lines | **Cleave**<br>Bob Alone (B1) | **Valid ✅**<br>Invalid ❌ | **2 / 2**<br>2 / 3 | **0**<br>0 | **895**<br>623 | **1.60**<br>2.20 | [Proof](https://cleave-sable.vercel.app/proof/click-dc3dbd0) |
-| **galaxium-lint-pass**<br>`galaxium-travels` · 218 lines | **Cleave**<br>Bob Alone (B1) | **Valid ✅**<br>Invalid ❌ | **2 / 2**<br>0 / 3 | **0**<br>0 | **1.20**<br>1.70 | [Proof](https://cleave-sable.vercel.app/proof/galaxium-travels-4886726) |
+| **galaxium-lint-pass**<br>`galaxium-travels` · 218 lines | **Cleave**<br>Bob Alone (B1) | **Valid ✅**<br>Invalid ❌ | **2 / 2**<br>0 / 3 | **0**<br>0 | **207**<br>191 | **1.20**<br>1.70 | [Proof](https://cleave-sable.vercel.app/proof/galaxium-travels-4886726) |
 
 ### Key Benchmark Takeaways:
 * **100% Reliability:** Cleave achieved **3 / 3 valid stacks (100%)**, whereas unaided Bob went **0 / 3 (0%)**, consistently failing on intermediate test breaks and circular dependencies.
